@@ -20,6 +20,7 @@ apply plugin: 'eclipse'
 
 repositories {
     jcenter()
+    // mavenCentral()
 }
 
 configurations {
@@ -42,9 +43,11 @@ dependencies {
 	compile "org.slf4j:slf4j-api:$sl4jApiVersion"
 	compile "org.slf4j:slf4j-log4j12:$sl4jLog4jVersion"
 	compile "log4j:log4j:$log4jVersion"
-    testCompile 'junit:junit:4.12'
+	compile "org.apache.hive:hive-metastore:$hiveVersion"
+    compile "org.apache.hadoop:hadoop-common:$hadoopVersion"		
  	compileAndJar "net.sf.jopt-simple:jopt-simple:$joptVersion"
     compileAndJar "com.esotericsoftware.yamlbeans:yamlbeans:$yamlbeansVersion"
+    testCompile 'junit:junit:4.12'
 }
 
 
