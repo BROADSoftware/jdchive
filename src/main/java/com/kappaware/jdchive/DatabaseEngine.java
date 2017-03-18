@@ -92,6 +92,10 @@ public class DatabaseEngine {
 		if(!database.getLocationUri().equals(location)) {
 			throw new DescriptionException(String.format("Database '%s': Location can't be changed ('%s' != '%s')", ddb.name, location, database.getLocationUri()));
 		}
+		if(!Utils.isEqual(ddb.properties, database.getParameters())) {
+			database.setParameters(ddb.properties);
+			changed = true;
+		}
 		if(changed) {
 			log.info(String.format("Will alter %s", database.toString()));
 			this.hmsc.alterDatabase(ddb.name, database);

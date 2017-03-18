@@ -15,6 +15,7 @@
  */
 package com.kappaware.jdchive;
 
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -70,8 +71,11 @@ public class Description {
 			if (this.location == null) {
 				throw new DescriptionException(String.format("Invalid description: Database '%s' is missing 'location' attribute", this.name));
 			}
-			if(! this.location.startsWith("/")) {
+			if( ! this.location.startsWith("/")) {
 				throw new DescriptionException(String.format("Invalid description: Database '%s' location must be absolute", this.name));
+			}
+			if( this.properties == null) {
+				this.properties = new HashMap<String, String>();
 			}
 			if (this.state == null) {
 				this.state = defaultState;
