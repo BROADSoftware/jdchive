@@ -64,6 +64,7 @@ public class Main {
 		description.polish(jdcConfiguration.getDefaultState());
 
 		HiveConf config = new HiveConf();
+		
 		for(String cf: jdcConfiguration.getConfigFiles()) {
 			File f = new File(cf);
 			if(!f.canRead()) {
@@ -99,6 +100,9 @@ public class Main {
 		int nbrModif = 0;
 		if(description.databases != null) {
 			nbrModif += (new DatabaseEngine(config, hmsc, description.databases)).run();
+		}
+		if(description.tables != null) {
+			nbrModif += (new TableEngine(config, hmsc, description.tables)).run();
 		}
 		
 		String m = String.format("jdchive: %d modification(s)", nbrModif);

@@ -44,6 +44,10 @@ dependencies {
 	compile "org.slf4j:slf4j-log4j12:$sl4jLog4jVersion"
 	compile "log4j:log4j:$log4jVersion"
 	compile "org.apache.hive:hive-metastore:$hiveVersion"
+	compile ("org.apache.hive:hive-exec:$hiveVersion") {
+		exclude group: "org.pentaho", module: "pentaho-aggdesigner-algorithm" // Could not find org.pentaho:pentaho-aggdesigner-algorithm:5.1.5-jhyde.
+		exclude group: "org.apache.curator", module: "apache-curator" // Archive for required library: '/..../.gradle/caches/modules-2/files-2.1/org.apache.curator/apache-curator/2.6.0/1bbbe3a8c191ec5a63ec2eaec7988d8292ea65d2/apache-curator-2.6.0.pom' in project 'jdchive' cannot be read or is not a valid ZIP file
+	}
     compile "org.apache.hadoop:hadoop-common:$hadoopVersion"		
  	compileAndJar "net.sf.jopt-simple:jopt-simple:$joptVersion"
     compileAndJar "com.esotericsoftware.yamlbeans:yamlbeans:$yamlbeansVersion"
