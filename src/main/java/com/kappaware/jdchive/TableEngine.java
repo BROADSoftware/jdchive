@@ -7,14 +7,9 @@ import java.util.Vector;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hive.conf.HiveConf;
-import org.apache.hadoop.hive.metastore.HiveMetaStoreClient;
-import org.apache.hadoop.hive.metastore.api.AlreadyExistsException;
-import org.apache.hadoop.hive.metastore.api.FieldSchema;
-import org.apache.hadoop.hive.metastore.api.InvalidObjectException;
-import org.apache.hadoop.hive.metastore.api.MetaException;
-import org.apache.hadoop.hive.metastore.api.NoSuchObjectException;
-import org.apache.hadoop.hive.metastore.api.StorageDescriptor;
-import org.apache.hadoop.hive.metastore.api.Table;
+import org.apache.hadoop.hive.ql.metadata.Hive;
+import org.apache.hadoop.hive.ql.metadata.HiveException;
+import org.apache.hadoop.hive.ql.metadata.Table;
 import org.apache.thrift.TException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -25,15 +20,15 @@ public class TableEngine {
 	static Logger log = LoggerFactory.getLogger(TableEngine.class);
 
 	
-	private HiveMetaStoreClient hmsc;
+	private Hive hive;
 	private List<Description.Table> tables;
 	private HiveConf configuration;
 	private URI defaultUri;
 	
-	public TableEngine(HiveConf configuration, HiveMetaStoreClient hmsc, List<Description.Table> tables) {
+	public TableEngine(HiveConf configuration, Hive hive, List<Description.Table> tables) {
 		this.configuration = configuration;
 		this.tables = tables;
-		this.hmsc = hmsc;
+		this.hive = hive;
 		this.defaultUri = FileSystem.getDefaultUri(this.configuration);
 		
 		
@@ -48,13 +43,13 @@ public class TableEngine {
 		}
 	}
 	
-	int run() throws MetaException, TException, DescriptionException {
+	int run() throws TException, DescriptionException {
 		int nbrModif = 0;
 		for(Description.Table dTable : this.tables) {
 			Table table = null;
 			try {
-				table = this.hmsc.getTable(dTable.database, dTable.name);
-			} catch (NoSuchObjectException e) {
+				table = this.hive.getTable(dTable.database, dTable.name);
+			} catch (HiveException e) {
 				// table = null
 			} 
 			if(table == null) {
@@ -78,8 +73,7 @@ public class TableEngine {
 	}
 
 	private boolean updateTable(Table table, com.kappaware.jdchive.Description.Table dTable) {
-		StorageDescriptor sd = table.getSd();
-		log.info(String.format("Found existing table: %s\n\nStorageDescriptor: %s", table.toString(), sd.toString()));
+		log.info(String.format("Found existing table: %s\n", table.toString()));
 		
 		
 		
@@ -94,13 +88,13 @@ public class TableEngine {
 
 
 	private void createTable(Description.Table dTable) {
-		String cmd = String.format("CREATE TABLE %s.%s (prefix STRING, fname STRING);", dTable.database, dTable.name);
+		String cmd = String.format("CREATE TABLE %s.%s (....);", dTable.database, dTable.name);
 		
 		
 		
 	}
 
-	
+	/*
 	private void createTable2(Description.Table dTable) throws AlreadyExistsException, InvalidObjectException, MetaException, NoSuchObjectException, TException, DescriptionException {
 		log.info(String.format("Will create new table %s.%s", dTable.database, dTable.name));
 		Table table = new Table();
@@ -143,6 +137,6 @@ public class TableEngine {
 		throw new RuntimeException("createTable() not yet implemented!!");
 	}
 
-	
+	*/
 	
 }

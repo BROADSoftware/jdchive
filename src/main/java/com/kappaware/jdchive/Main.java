@@ -19,10 +19,16 @@ import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.FileReader;
 import java.io.IOException;
+import java.util.List;
 
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hive.conf.HiveConf;
+import org.apache.hadoop.hive.conf.HiveConfUtil;
 import org.apache.hadoop.hive.metastore.HiveMetaStoreClient;
+import org.apache.hadoop.hive.metastore.IMetaStoreClient;
+import org.apache.hadoop.hive.ql.metadata.Hive;
+import org.apache.hadoop.hive.ql.metadata.HiveException;
+import org.apache.hadoop.hive.ql.session.SessionState;
 import org.apache.hadoop.security.UserGroupInformation;
 import org.apache.thrift.TException;
 import org.slf4j.Logger;
@@ -35,7 +41,6 @@ import com.kappaware.jdchive.config.JdcConfiguration;
 import com.kappaware.jdchive.config.JdcConfigurationImpl;
 import com.kappaware.jdchive.config.Parameters;
 
-
 public class Main {
 	static Logger log = LoggerFactory.getLogger(Main.class);
 
@@ -43,14 +48,14 @@ public class Main {
 		try {
 			main2(argv);
 			System.exit(0);
-		} catch (ConfigurationException | DescriptionException | FileNotFoundException | YamlException | InterruptedException | TException e) {
+		} catch (ConfigurationException | DescriptionException | FileNotFoundException | YamlException | InterruptedException | TException | HiveException e) {
 			log.error(e.getMessage());
 			System.err.println("ERROR: " + e.getMessage());
 			System.exit(1);
 		}
 	}
 
-	static public void main2(String[] argv) throws ConfigurationException, DescriptionException, IOException, InterruptedException, TException {
+	static public void main2(String[] argv) throws ConfigurationException, DescriptionException, IOException, InterruptedException, TException, HiveException {
 		log.info("jdchtable start");
 
 		JdcConfiguration jdcConfiguration = new JdcConfigurationImpl(new Parameters(argv));
@@ -65,9 +70,9 @@ public class Main {
 
 		HiveConf config = new HiveConf();
 		
-		for(String cf: jdcConfiguration.getConfigFiles()) {
+		for (String cf : jdcConfiguration.getConfigFiles()) {
 			File f = new File(cf);
-			if(!f.canRead()) {
+			if (!f.canRead()) {
 				throw new ConfigurationException(String.format("Unable to read file '%s'", cf));
 			}
 			log.debug(String.format("Will load '%s'", cf));
@@ -80,7 +85,7 @@ public class Main {
 		if (Utils.hasText(jdcConfiguration.getKeytab()) && Utils.hasText(jdcConfiguration.getPrincipal())) {
 			// Check if keytab file exists and is readable
 			File f = new File(jdcConfiguration.getKeytab());
-			if(! f.canRead()) {
+			if (!f.canRead()) {
 				throw new ConfigurationException(String.format("Unable to read keytab file: '%s'", jdcConfiguration.getKeytab()));
 			}
 			UserGroupInformation.setConfiguration(config);
@@ -95,21 +100,59 @@ public class Main {
 			}
 		}
 		
-		HiveMetaStoreClient hmsc = new HiveMetaStoreClient(config);
+		
+		//SessionState.start(config);
+		
+		//SessionState.get().setConf(config);
+		
+		SessionState.setCurrentSessionState(new SessionState(config));
+		
+	    //String msUri = config.getVar(HiveConf.ConfVars.METASTOREURIS);
+	    //boolean localMetaStore = HiveConfUtil.isEmbeddedMetaStore(msUri);
+	    //log.info(String.format("========================= msUri: '%s'   localMetaStore:%s", msUri, Boolean.toString(localMetaStore)));
+		
+		if(true) {
+			Hive hive = Hive.get(config, true);
+			IMetaStoreClient imsc = hive.getMSC();
+			
+			log.info("++++++++++++++++++ IMetaStoreClient" + imsc.toString());
+
+			
+			List<String> dbs = hive.getAllDatabases();
+			for (String s : dbs) {
+				log.info(String.format("Hive: Found database '%s'", s));
+			}
+			
+			
+		}
+
+		if (true) {
+			HiveMetaStoreClient hmsc = new HiveMetaStoreClient(config);
+			List<String> dbs = hmsc.getAllDatabases();
+			for (String s : dbs) {
+				log.info(String.format("HiveMetaStoreClient: Found database '%s'", s));
+			}
+		}
+
+		/*
 		
 		int nbrModif = 0;
 		if(description.databases != null) {
 			nbrModif += (new DatabaseEngine(config, hmsc, description.databases)).run();
 		}
+		
+		
+		
+		Hive hive = Hive.get();
 		if(description.tables != null) {
-			nbrModif += (new TableEngine(config, hmsc, description.tables)).run();
+			nbrModif += (new TableEngine(config, hive, description.tables)).run();
 		}
 		
 		String m = String.format("jdchive: %d modification(s)", nbrModif);
 		System.out.println(m);
 		log.info(m);
+		*/
 
-		
 		/*
 		
 		List<String> databaseNames = hmsc.getAllDatabases();
