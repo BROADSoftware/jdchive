@@ -6,7 +6,8 @@ import java.util.Vector;
 
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.hive.conf.HiveConf;
+import org.apache.hadoop.hive.metastore.TableType;
+import org.apache.hadoop.hive.metastore.api.FieldSchema;
 import org.apache.hadoop.hive.ql.metadata.Hive;
 import org.apache.hadoop.hive.ql.metadata.HiveException;
 import org.apache.hadoop.hive.ql.metadata.Table;
@@ -22,36 +23,27 @@ public class TableEngine {
 	
 	private Hive hive;
 	private List<Description.Table> tables;
-	private HiveConf configuration;
 	private URI defaultUri;
 	
-	public TableEngine(HiveConf configuration, Hive hive, List<Description.Table> tables) {
-		this.configuration = configuration;
+	public TableEngine(Hive hive, List<Description.Table> tables) {
 		this.tables = tables;
 		this.hive = hive;
-		this.defaultUri = FileSystem.getDefaultUri(this.configuration);
-		
-		
+		this.defaultUri = FileSystem.getDefaultUri(hive.getConf());
 	}
 
 	
-	private String normalizePath(String path) {
+	private Path normalizePath(String path) {
 		if(path.startsWith("hdfs:")) {
-			return path;
+			return new Path(path);
 		} else {
-			return Path.mergePaths(new Path(this.defaultUri), new Path(path)).toString();
+			return Path.mergePaths(new Path(this.defaultUri), new Path(path));
 		}
 	}
 	
-	int run() throws TException, DescriptionException {
+	int run() throws TException, DescriptionException, HiveException {
 		int nbrModif = 0;
 		for(Description.Table dTable : this.tables) {
-			Table table = null;
-			try {
-				table = this.hive.getTable(dTable.database, dTable.name);
-			} catch (HiveException e) {
-				// table = null
-			} 
+			Table table = this.hive.getTable(dTable.database, dTable.name, false);
 			if(table == null) {
 				if(dTable.state == State.present) {
 					this.createTable(dTable);
@@ -81,62 +73,55 @@ public class TableEngine {
 	}
 
 
-	private void dropTable(com.kappaware.jdchive.Description.Table dTable) {
+	private void dropTable(com.kappaware.jdchive.Description.Table dTable) throws HiveException {
 		log.info(String.format("Will drop table '%s.%s'", dTable.database, dTable.name));
-		throw new RuntimeException("dropTable() not yet implemented!!");
+		this.hive.dropTable(dTable.database, dTable.name);
 	}
 
 
-	private void createTable(Description.Table dTable) {
-		String cmd = String.format("CREATE TABLE %s.%s (....);", dTable.database, dTable.name);
-		
-		
-		
-	}
 
-	/*
-	private void createTable2(Description.Table dTable) throws AlreadyExistsException, InvalidObjectException, MetaException, NoSuchObjectException, TException, DescriptionException {
+	private void createTable(Description.Table dTable) throws TException, DescriptionException, HiveException {
 		log.info(String.format("Will create new table %s.%s", dTable.database, dTable.name));
-		Table table = new Table();
-		table.setTableName(dTable.name);
-		table.setDbName(dTable.database);
-		if(dTable.external) {
-			table.setTableType("EXTERNAL_TABLE");
-		} else {
-			table.setTableType("MANAGED_TABLE");
-		}
+		Table table = new Table(dTable.database, dTable.name);
 		if(dTable.owner != null) {
 			table.setOwner(dTable.owner);
 		}
-		table.setParameters(dTable.properties);
-		StorageDescriptor sd = table.getSd();
+		//table.setParamters(dTable.properties); // Does not works, as some jar fixed the type
+		table.getTTable().setParameters(dTable.properties);
+		if(dTable.comment != null) {
+			table.setProperty("comment", dTable.comment);
+		}
+		if(dTable.external.booleanValue()) {
+			table.setTableType(TableType.EXTERNAL_TABLE);
+			table.setProperty("EXTERNAL", "TRUE");
+		} else {
+			table.setTableType(TableType.MANAGED_TABLE);
+		}
 		List<FieldSchema> fields = new Vector<FieldSchema>();
 		for(Description.Field f : dTable.fields) {
 			fields.add(new FieldSchema(f.name, f.type, f.comment));
 		}
-		sd.setCols(fields);
+		table.setFields(fields);
 		if(dTable.location != null) {
-			sd.setLocation(normalizePath(dTable.location));
-		}
-		StorageFormatHelper sfHelper = new StorageFormatHelper(this.configuration, dTable);
-		if(sfHelper.getInputFormat() != null) {
-			sd.setInputFormat(sfHelper.getInputFormat());
-			sd.setOutputFormat(sfHelper.getOutputFormat());
-		}
-		if(sfHelper.getSerde() != null) {
-			table.getSd().getSerdeInfo().setSerializationLib(sfHelper.getSerde());
+			table.setDataLocation(this.normalizePath(dTable.location));
 		}
 		
+		StorageFormatHelper sfHelper = new StorageFormatHelper(this.hive.getConf(), dTable);
+		if(sfHelper.getInputFormat() != null) {
+			table.setInputFormatClass(sfHelper.getInputFormat());
+			table.setOutputFormatClass(sfHelper.getOutputFormat());
+		}
+		if(sfHelper.getSerde() != null) {
+			table.setSerializationLib(sfHelper.getSerde());
+		}
 		if(sfHelper.getStorageHandler() != null) {
 			table.getParameters().put("storage_handler", sfHelper.getStorageHandler());
 		}
-		
-		
-		
-		this.hmsc.createTable(table);
-		throw new RuntimeException("createTable() not yet implemented!!");
+		for(String key : dTable.serde_properties.keySet()) {
+			table.setSerdeParam(key, dTable.serde_properties.get(key));
+		}
+		this.hive.createTable(table);
 	}
 
-	*/
 	
 }

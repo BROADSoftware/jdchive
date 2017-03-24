@@ -1,0 +1,11 @@
+
+
+
+tables:
+- name: test1
+  database: dbtest1
+  external: xx
+  fields:
+  - name: fname
+    type: string
+    

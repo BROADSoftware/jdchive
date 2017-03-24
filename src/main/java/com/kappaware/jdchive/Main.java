@@ -19,13 +19,9 @@ import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.FileReader;
 import java.io.IOException;
-import java.util.List;
 
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hive.conf.HiveConf;
-import org.apache.hadoop.hive.conf.HiveConfUtil;
-import org.apache.hadoop.hive.metastore.HiveMetaStoreClient;
-import org.apache.hadoop.hive.metastore.IMetaStoreClient;
 import org.apache.hadoop.hive.ql.metadata.Hive;
 import org.apache.hadoop.hive.ql.metadata.HiveException;
 import org.apache.hadoop.hive.ql.session.SessionState;
@@ -49,7 +45,7 @@ public class Main {
 			main2(argv);
 			System.exit(0);
 		} catch (ConfigurationException | DescriptionException | FileNotFoundException | YamlException | InterruptedException | TException | HiveException e) {
-			log.error(e.getMessage());
+			log.error("Error in main():",e);
 			System.err.println("ERROR: " + e.getMessage());
 			System.exit(1);
 		}
@@ -100,46 +96,52 @@ public class Main {
 			}
 		}
 		
-		
-		//SessionState.start(config);
-		
-		//SessionState.get().setConf(config);
-		
 		SessionState.setCurrentSessionState(new SessionState(config));
+		Hive hive = Hive.get();
 		
+		DatabaseEngine databaseEngine = new DatabaseEngine(hive, description.databases);
+		
+		int nbrModif = 0;
+		if(description.databases != null) {
+			nbrModif += databaseEngine.addOperation();
+		}
+		
+		if(description.tables != null) {
+			nbrModif += (new TableEngine(hive, description.tables)).run();
+		}
+
+		if(description.databases != null) {
+			nbrModif += databaseEngine.dropOperation();
+		}
+
+		String m = String.format("jdchive: %d modification(s)", nbrModif);
+		System.out.println(m);
+		log.info(m);
+
+
 	    //String msUri = config.getVar(HiveConf.ConfVars.METASTOREURIS);
 	    //boolean localMetaStore = HiveConfUtil.isEmbeddedMetaStore(msUri);
 	    //log.info(String.format("========================= msUri: '%s'   localMetaStore:%s", msUri, Boolean.toString(localMetaStore)));
-		
-		if(true) {
+		/*
+		if(false) {
 			Hive hive = Hive.get(config, true);
 			IMetaStoreClient imsc = hive.getMSC();
-			
 			log.info("++++++++++++++++++ IMetaStoreClient" + imsc.toString());
-
-			
 			List<String> dbs = hive.getAllDatabases();
 			for (String s : dbs) {
 				log.info(String.format("Hive: Found database '%s'", s));
 			}
-			
-			
 		}
 
-		if (true) {
+		if (false) {
 			HiveMetaStoreClient hmsc = new HiveMetaStoreClient(config);
 			List<String> dbs = hmsc.getAllDatabases();
 			for (String s : dbs) {
 				log.info(String.format("HiveMetaStoreClient: Found database '%s'", s));
 			}
 		}
-
+		*/
 		/*
-		
-		int nbrModif = 0;
-		if(description.databases != null) {
-			nbrModif += (new DatabaseEngine(config, hmsc, description.databases)).run();
-		}
 		
 		
 		

@@ -1,0 +1,26 @@
+
+
+
+tables:
+- name: test1
+  database: dbtest1
+  fields:
+  - name: fname
+    type: string
+    
+- name: test2
+  database: dbtest1
+  external: true
+  fields:
+  - name: fname
+    type: string
+    
+        
+- name: test3
+  database: dbtest1
+  external: Yes
+  fields:
+  - name: fname
+    type: string
+    
+    

@@ -26,22 +26,22 @@ public class StorageFormatHelper {
 
 	StorageFormatHelper(HiveConf conf, Description.Table tbl) throws DescriptionException {
 		this.conf = conf;
-		if (tbl.fileFormat != null) {
-			this.processStorageFormat(tbl.fileFormat.toString());
+		if (tbl.file_format != null) {
+			this.processStorageFormat(tbl.file_format.toString());
 		} 
-		if(tbl.inputFormat != null) {
-			this.inputFormat = ensureClassExists(tbl.inputFormat);
+		if(tbl.input_format != null) {
+			this.inputFormat = ensureClassExists(tbl.input_format);
 		}
-		if(tbl.outputFormat != null) {
-			this.outputFormat = ensureClassExists(tbl.outputFormat);
+		if(tbl.output_format != null) {
+			this.outputFormat = ensureClassExists(tbl.output_format);
 		}
-		if(tbl.storageHandler != null) {
-			this.storageHandler = ensureClassExists(tbl.storageHandler);
+		if(tbl.storage_handler != null) {
+			this.storageHandler = ensureClassExists(tbl.storage_handler);
 		}
 		if(tbl.serde != null) {
 			this.serde = ensureClassExists(tbl.serde);
 		}
-		this.fillDefaultStorageFormat(tbl.external);
+		this.fillDefaultStorageFormat(tbl.external.booleanValue());
 	}
 
 	

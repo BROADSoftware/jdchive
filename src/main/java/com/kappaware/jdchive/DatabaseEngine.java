@@ -5,15 +5,10 @@ import java.util.List;
 
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.hive.conf.HiveConf;
-import org.apache.hadoop.hive.metastore.HiveMetaStoreClient;
-import org.apache.hadoop.hive.metastore.api.AlreadyExistsException;
 import org.apache.hadoop.hive.metastore.api.Database;
-import org.apache.hadoop.hive.metastore.api.InvalidObjectException;
-import org.apache.hadoop.hive.metastore.api.InvalidOperationException;
-import org.apache.hadoop.hive.metastore.api.MetaException;
-import org.apache.hadoop.hive.metastore.api.NoSuchObjectException;
 import org.apache.hadoop.hive.metastore.api.PrincipalType;
+import org.apache.hadoop.hive.ql.metadata.Hive;
+import org.apache.hadoop.hive.ql.metadata.HiveException;
 import org.apache.thrift.TException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -24,16 +19,14 @@ public class DatabaseEngine {
 	static Logger log = LoggerFactory.getLogger(DatabaseEngine.class);
 
 	
-	private HiveMetaStoreClient hmsc;
+	private Hive hive;
 	private List<Description.Database> databases;
-	private HiveConf configuration;
 	private URI defaultUri;
 	
-	public DatabaseEngine(HiveConf configuration, HiveMetaStoreClient hmsc, List<Description.Database> databases) {
-		this.configuration = configuration;
+	public DatabaseEngine(Hive hive, List<Description.Database> databases) {
 		this.databases = databases;
-		this.hmsc = hmsc;
-		this.defaultUri = FileSystem.getDefaultUri(this.configuration);
+		this.hive = hive;
+		this.defaultUri = FileSystem.getDefaultUri(hive.getConf());
 	}
 
 	
@@ -45,36 +38,39 @@ public class DatabaseEngine {
 		}
 	}
 	
-	int run() throws MetaException, TException, DescriptionException {
+	int addOperation() throws TException, DescriptionException, HiveException {
 		int nbrModif = 0;
 		for(Description.Database ddb : this.databases) {
-			Database database = null;
-			try {
-				database = this.hmsc.getDatabase(ddb.name);
-			} catch (NoSuchObjectException e) {
-				// database = null
-			} 
-			if(database == null) {
-				if(ddb.state == State.present) {
+			if(ddb.state == State.present) {
+				Database database = this.hive.getDatabase(ddb.name);
+				if(database == null) {
 					this.createDatabase(ddb);
 					nbrModif++;
-				} // Else nothing to do
-			} else {
-				if(ddb.state == State.absent) {
-					this.dropDatabase(ddb);
-					nbrModif++;
-				} else {
+				} else { 
 					if(this.updateDatabase(database, ddb)) {
 						nbrModif++;
 					}
 				}
-				
 			}
 		}
 		return nbrModif;
 	}
 
-	private boolean updateDatabase(Database database, com.kappaware.jdchive.Description.Database ddb) throws MetaException, NoSuchObjectException, TException, DescriptionException {
+	int dropOperation() throws TException, DescriptionException, HiveException {
+		int nbrModif = 0;
+		for(Description.Database ddb : this.databases) {
+			if(ddb.state == State.absent) {
+				Database database = this.hive.getDatabase(ddb.name);
+				if(database != null) {
+					this.dropDatabase(ddb);
+					nbrModif++;
+				}
+			}
+		}
+		return nbrModif;
+	}
+
+	private boolean updateDatabase(Database database, com.kappaware.jdchive.Description.Database ddb) throws TException, DescriptionException, HiveException {
 		log.info(String.format("Found existing %s",database.toString()));
 		boolean changed = false;
 		if (ddb.comment != null && !ddb.comment.equals(database.getDescription())) {
@@ -98,19 +94,19 @@ public class DatabaseEngine {
 		}
 		if(changed) {
 			log.info(String.format("Will alter %s", database.toString()));
-			this.hmsc.alterDatabase(ddb.name, database);
+			this.hive.alterDatabase(ddb.name, database);
 			return true;
 		} else {
 			return false;
 		}
 	}
 
-	private void dropDatabase(com.kappaware.jdchive.Description.Database ddb) throws NoSuchObjectException, InvalidOperationException, MetaException, TException {
+	private void dropDatabase(com.kappaware.jdchive.Description.Database ddb) throws TException, HiveException {
 		log.info(String.format("Will drop database '%s'", ddb.name));
-		this.hmsc.dropDatabase(ddb.name);
+		this.hive.dropDatabase(ddb.name);
 	}
 
-	private void createDatabase(Description.Database ddb) throws AlreadyExistsException, InvalidObjectException, MetaException, TException {
+	private void createDatabase(Description.Database ddb) throws TException, HiveException {
 		Database database = new Database(ddb.name, ddb.comment, this.normalizePath(ddb.location), ddb.properties);
 		if(ddb.owner_name != null) {
 			database.setOwnerName(ddb.owner_name);
@@ -119,7 +115,7 @@ public class DatabaseEngine {
 			database.setOwnerType(PrincipalType.valueOf(ddb.owner_type.toString().toUpperCase()));
 		}
 		log.info(String.format("Will create new %s", database));
-		this.hmsc.createDatabase(database);
+		this.hive.createDatabase(database);
 	}
 	
 	

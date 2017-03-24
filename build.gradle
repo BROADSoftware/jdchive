@@ -49,6 +49,7 @@ dependencies {
 		exclude group: "org.apache.curator", module: "apache-curator" // Archive for required library: '/..../.gradle/caches/modules-2/files-2.1/org.apache.curator/apache-curator/2.6.0/1bbbe3a8c191ec5a63ec2eaec7988d8292ea65d2/apache-curator-2.6.0.pom' in project 'jdchive' cannot be read or is not a valid ZIP file
 	}
     compile "org.apache.hadoop:hadoop-common:$hadoopVersion"		
+    compile "org.apache.hadoop:hadoop-mapreduce-client-core:$hadoopVersion"		
  	compileAndJar "net.sf.jopt-simple:jopt-simple:$joptVersion"
     compileAndJar "com.esotericsoftware.yamlbeans:yamlbeans:$yamlbeansVersion"
     testCompile 'junit:junit:4.12'

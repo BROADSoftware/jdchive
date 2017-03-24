@@ -21,6 +21,8 @@ import java.util.Map;
 import java.util.Vector;
 
 import com.esotericsoftware.yamlbeans.YamlConfig;
+import com.esotericsoftware.yamlbeans.YamlException;
+import com.esotericsoftware.yamlbeans.scalar.ScalarSerializer;
 
 public class Description {
 	public enum State {
@@ -31,10 +33,43 @@ public class Description {
 		user, group, role, USER, GROUP, ROLE
 	}
 
+	static class MBool {
+		public boolean value;
+
+		public MBool(boolean b) {
+			this.value = b;
+		}
+
+		public boolean booleanValue() {
+			return value;
+		}
+	}
+
+	static class MBoolSerializer implements ScalarSerializer<MBool> {
+
+		@Override
+		public MBool read(String value) throws YamlException {
+			if ("yes".equalsIgnoreCase(value) || "true".equalsIgnoreCase(value)) {
+				return new Description.MBool(true);
+			} else if ("no".equalsIgnoreCase(value) || "false".equalsIgnoreCase(value)) {
+				return new MBool(false);
+			} else {
+				throw new YamlException("String value must be 'yes', 'true', 'no' or 'false', not" + value);
+			}
+		}
+
+		@Override
+		public String write(MBool value) throws YamlException {
+			return value.booleanValue() ? "true" : "false";
+		}
+	}
+
 	static YamlConfig yamlConfig = new YamlConfig();
 	static {
 		yamlConfig.setPropertyElementType(Description.class, "databases", Database.class);
 		yamlConfig.setPropertyElementType(Description.class, "tables", Table.class);
+		yamlConfig.setPropertyElementType(Table.class, "fields", Field.class);
+		yamlConfig.setScalarSerializer(MBool.class, new Description.MBoolSerializer());
 	}
 
 	static public YamlConfig getYamlConfig() {
@@ -92,18 +127,18 @@ public class Description {
 	static public class Table {
 		public String name;
 		public String database;
-		public boolean external;
+		public MBool external;
 		public String owner;
-		public String comment;
 		public Map<String, String> properties;
+		public String comment;
 		public List<Field> fields;
 		public String location;
-		public String fileFormat;
-		public String storageHandler;
-		public String inputFormat;
-		public String outputFormat;
+		public String file_format;
+		public String storage_handler;
+		public String input_format;
+		public String output_format;
 		public String serde;
-		public Map<String, String> serdeProperties;
+		public Map<String, String> serde_properties;
 		public State state;
 
 		void polish(State defaultState) throws DescriptionException {
@@ -112,6 +147,9 @@ public class Description {
 			}
 			if (this.database == null) {
 				throw new DescriptionException(String.format("Invalid description: Table '%s' is missing database attribute!", this.name));
+			}
+			if (this.external == null) {
+				this.external = new MBool(false);
 			}
 			if (this.fields == null) {
 				this.fields = new Vector<Field>();
@@ -125,11 +163,11 @@ public class Description {
 			if (this.comment != null) {
 				this.properties.put("comment", this.comment);
 			}
-			if ((this.inputFormat == null) !=  (this.outputFormat == null)) {
+			if ((this.input_format == null) != (this.output_format == null)) {
 				throw new DescriptionException(String.format("Invalid description: Table '%s.%s': Both 'inputFormat' and 'outputFormat' must be defined together!", this.database, this.name));
 			}
-			if (this.serdeProperties == null) {
-				this.serdeProperties = new HashMap<String, String>();
+			if (this.serde_properties == null) {
+				this.serde_properties = new HashMap<String, String>();
 			}
 			if (this.state == null) {
 				this.state = defaultState;
