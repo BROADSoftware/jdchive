@@ -18,6 +18,7 @@ package com.kappaware.jdchive;
 import java.io.BufferedWriter;
 import java.io.FileWriter;
 import java.io.IOException;
+import java.io.StringWriter;
 import java.io.Writer;
 import java.util.Arrays;
 import java.util.EnumSet;
@@ -26,6 +27,9 @@ import java.util.Iterator;
 import java.util.Map;
 
 import org.apache.hadoop.conf.Configuration;
+
+import com.esotericsoftware.yamlbeans.YamlConfig;
+import com.esotericsoftware.yamlbeans.YamlWriter;
 
 
 public class Utils {
@@ -101,6 +105,19 @@ public class Utils {
 			return o1.equals(o2);
 		}
 	}
-	
+
+	public static String toYamlString(Object o, YamlConfig yamlConfig) {
+		StringWriter sw = new StringWriter();
+		YamlWriter yamlWriter = new YamlWriter(sw, yamlConfig);
+		try {
+			yamlWriter.write(o);
+			yamlWriter.close();
+			sw.close();
+		} catch (Exception e) {
+			throw new RuntimeException("Exception in YAML generation", e);
+		}
+		return sw.toString();
+	}
+
 	
 }

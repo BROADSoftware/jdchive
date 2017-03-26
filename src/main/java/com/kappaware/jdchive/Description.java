@@ -21,6 +21,7 @@ import java.util.Map;
 import java.util.Vector;
 
 import com.esotericsoftware.yamlbeans.YamlConfig;
+import com.esotericsoftware.yamlbeans.YamlConfig.WriteClassName;
 import com.esotericsoftware.yamlbeans.YamlException;
 import com.esotericsoftware.yamlbeans.scalar.ScalarSerializer;
 
@@ -42,6 +43,12 @@ public class Description {
 
 		public boolean booleanValue() {
 			return value;
+		}
+		
+		@Override
+		public boolean equals(Object other) {
+			return this.booleanValue() == ((MBool)other).booleanValue();
+			
 		}
 	}
 
@@ -70,6 +77,10 @@ public class Description {
 		yamlConfig.setPropertyElementType(Description.class, "tables", Table.class);
 		yamlConfig.setPropertyElementType(Table.class, "fields", Field.class);
 		yamlConfig.setScalarSerializer(MBool.class, new Description.MBoolSerializer());
+		yamlConfig.writeConfig.setWriteRootTags(false);
+		yamlConfig.writeConfig.setWriteRootElementTags(false);
+		yamlConfig.writeConfig.setWriteClassname(WriteClassName.NEVER);
+		yamlConfig.writeConfig.setIndentSize(2);
 	}
 
 	static public YamlConfig getYamlConfig() {
@@ -121,18 +132,25 @@ public class Description {
 				this.state = defaultState;
 			}
 		}
-
+		
+		String toYaml() {
+			return Utils.toYamlString(this, Description.yamlConfig);
+		}
 	}
 
 	static public class Table {
 		public String name;
 		public String database;
 		public MBool external;
-		public String owner;
-		public Map<String, String> properties;
-		public String comment;
 		public List<Field> fields;
+		public String owner;		// TODO: Remove ?
+		public String comment;
 		public String location;
+		public Map<String, String> properties;
+		public MBool droppable;
+
+		
+		
 		public String file_format;
 		public String storage_handler;
 		public String input_format;
@@ -151,6 +169,9 @@ public class Description {
 			if (this.external == null) {
 				this.external = new MBool(false);
 			}
+			if(this.droppable == null) {
+				this.droppable = new MBool(this.external.booleanValue());
+			}
 			if (this.fields == null) {
 				this.fields = new Vector<Field>();
 			}
@@ -159,9 +180,6 @@ public class Description {
 			}
 			if (this.properties == null) {
 				this.properties = new HashMap<String, String>();
-			}
-			if (this.comment != null) {
-				this.properties.put("comment", this.comment);
 			}
 			if ((this.input_format == null) != (this.output_format == null)) {
 				throw new DescriptionException(String.format("Invalid description: Table '%s.%s': Both 'inputFormat' and 'outputFormat' must be defined together!", this.database, this.name));
@@ -173,6 +191,12 @@ public class Description {
 				this.state = defaultState;
 			}
 		}
+		
+		String toYaml() {
+			return Utils.toYamlString(this, Description.yamlConfig);
+		}
+		
+		
 	}
 
 	static public class Field {
@@ -187,6 +211,17 @@ public class Description {
 			if (this.type == null) {
 				throw new DescriptionException(String.format("Invalid description: Table '%s'. Missing 'type' attribute for field '%s'!", tableName, this.name));
 			}
+		}
+		
+
+	
+		public boolean almostEquals(Object other) {
+			return this.name.equalsIgnoreCase(((Field)other).name) && this.type.equalsIgnoreCase(((Field)other).type);
+		}
+
+		@Override
+		public boolean equals(Object other) {
+			return this.name.equalsIgnoreCase(((Field)other).name) && this.type.equalsIgnoreCase(((Field)other).type) && this.comment.equals(((Field)other).comment);
 		}
 	}
 

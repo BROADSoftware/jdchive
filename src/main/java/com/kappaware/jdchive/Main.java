@@ -22,6 +22,8 @@ import java.io.IOException;
 
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hive.conf.HiveConf;
+import org.apache.hadoop.hive.ql.CommandNeedRetryException;
+import org.apache.hadoop.hive.ql.Driver;
 import org.apache.hadoop.hive.ql.metadata.Hive;
 import org.apache.hadoop.hive.ql.metadata.HiveException;
 import org.apache.hadoop.hive.ql.session.SessionState;
@@ -44,14 +46,14 @@ public class Main {
 		try {
 			main2(argv);
 			System.exit(0);
-		} catch (ConfigurationException | DescriptionException | FileNotFoundException | YamlException | InterruptedException | TException | HiveException e) {
+		} catch (ConfigurationException | DescriptionException | FileNotFoundException | YamlException | InterruptedException | TException | HiveException | CommandNeedRetryException e) {
 			log.error("Error in main():",e);
 			System.err.println("ERROR: " + e.getMessage());
 			System.exit(1);
 		}
 	}
 
-	static public void main2(String[] argv) throws ConfigurationException, DescriptionException, IOException, InterruptedException, TException, HiveException {
+	static public void main2(String[] argv) throws ConfigurationException, DescriptionException, IOException, InterruptedException, TException, HiveException, CommandNeedRetryException {
 		log.info("jdchtable start");
 
 		JdcConfiguration jdcConfiguration = new JdcConfigurationImpl(new Parameters(argv));
@@ -95,9 +97,17 @@ public class Main {
 				throw new ConfigurationException(String.format("Kerberos: Unable to authenticate with principal='%s' and keytab='%s'.", jdcConfiguration.getPrincipal(), jdcConfiguration.getKeytab()));
 			}
 		}
+		config.set("hive.execution.engine", "mr");
 		
-		SessionState.setCurrentSessionState(new SessionState(config));
+		SessionState ss = new SessionState(config);
+
+		SessionState.setCurrentSessionState(ss);
+		
+		
+		
+		SessionState.start(config);
 		Hive hive = Hive.get();
+		Driver driver = new Driver();
 		
 		DatabaseEngine databaseEngine = new DatabaseEngine(hive, description.databases);
 		
@@ -107,7 +117,7 @@ public class Main {
 		}
 		
 		if(description.tables != null) {
-			nbrModif += (new TableEngine(hive, description.tables)).run();
+			nbrModif += (new TableEngine(hive, driver, description.tables)).run();
 		}
 
 		if(description.databases != null) {
@@ -119,52 +129,5 @@ public class Main {
 		log.info(m);
 
 
-	    //String msUri = config.getVar(HiveConf.ConfVars.METASTOREURIS);
-	    //boolean localMetaStore = HiveConfUtil.isEmbeddedMetaStore(msUri);
-	    //log.info(String.format("========================= msUri: '%s'   localMetaStore:%s", msUri, Boolean.toString(localMetaStore)));
-		/*
-		if(false) {
-			Hive hive = Hive.get(config, true);
-			IMetaStoreClient imsc = hive.getMSC();
-			log.info("++++++++++++++++++ IMetaStoreClient" + imsc.toString());
-			List<String> dbs = hive.getAllDatabases();
-			for (String s : dbs) {
-				log.info(String.format("Hive: Found database '%s'", s));
-			}
-		}
-
-		if (false) {
-			HiveMetaStoreClient hmsc = new HiveMetaStoreClient(config);
-			List<String> dbs = hmsc.getAllDatabases();
-			for (String s : dbs) {
-				log.info(String.format("HiveMetaStoreClient: Found database '%s'", s));
-			}
-		}
-		*/
-		/*
-		
-		
-		
-		Hive hive = Hive.get();
-		if(description.tables != null) {
-			nbrModif += (new TableEngine(config, hive, description.tables)).run();
-		}
-		
-		String m = String.format("jdchive: %d modification(s)", nbrModif);
-		System.out.println(m);
-		log.info(m);
-		*/
-
-		/*
-		
-		List<String> databaseNames = hmsc.getAllDatabases();
-		for(String dbn : databaseNames) {
-			log.info(String.format("Database: %s", dbn));
-			List<String> tableNames = hmsc.getTables(dbn, "*");
-			for(String t : tableNames) {
-				log.info(String.format("    table: %s", t));
-			}
-		}
-		*/
 	}
 }
