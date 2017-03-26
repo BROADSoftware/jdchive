@@ -13,29 +13,28 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.kappaware.jdchive.config;
+package com.kappaware.jdchive.yaml;
 
 import java.util.List;
 
-import com.kappaware.jdchive.yaml.YamlState;
+import com.kappaware.jdchive.DescriptionException;
 
+public class YamlDescription {
 
-public interface JdcConfiguration {
+	public List<YamlDatabase> databases;
+	public List<YamlTable> tables;
 
-	String getInputFile();
-
-	YamlState getDefaultState();
-
-	String getPrincipal();
-	
-	String getKeytab();
-
-	String getDumpConfigFile();
-
-	List<String> getConfigFiles();
-
-	String getReportFile();
-
-
+	public void polish(YamlState defaultState) throws DescriptionException {
+		if (databases != null) {
+			for (YamlDatabase db : this.databases) {
+				db.polish(defaultState);
+			}
+		}
+		if (tables != null) {
+			for (YamlTable tbl : this.tables) {
+				tbl.polish(defaultState);
+			}
+		}
+	}
 
 }

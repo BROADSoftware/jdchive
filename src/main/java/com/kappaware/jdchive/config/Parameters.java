@@ -30,18 +30,19 @@ import joptsimple.OptionParser;
 import joptsimple.OptionSet;
 import joptsimple.OptionSpec;
 
-import com.kappaware.jdchive.Description.State;
 import com.kappaware.jdchive.Utils;
+import com.kappaware.jdchive.yaml.YamlState;
 
 
 public class Parameters {
 	static Logger log = LoggerFactory.getLogger(Parameters.class);
 
 	private String inputFile;
-	private State defaultState;
+	private YamlState defaultState;
 	private String principal;
 	private String keytab;
 	private String dumpConfigFile;
+	private String reportFile;
 	private List<String> configFiles;
 	
 	static OptionParser parser = new OptionParser();
@@ -49,7 +50,7 @@ public class Parameters {
 		parser.formatHelpWith(new BuiltinHelpFormatter(120,2));
 	}
 	static OptionSpec<String> INPUT_FILE_OPT = parser.accepts("inputFile", "Hbase table layout description").withRequiredArg().describedAs("input_file").ofType(String.class).required();
-	static OptionSpec<State> DEFAULT_STATE = parser.accepts("defaultState", "Default entity state").withRequiredArg().describedAs("present|absent").ofType(State.class).defaultsTo(State.present);
+	static OptionSpec<YamlState> DEFAULT_STATE = parser.accepts("defaultState", "Default entity state").withRequiredArg().describedAs("present|absent").ofType(YamlState.class).defaultsTo(YamlState.present);
 
 	static OptionSpec<String> CONFIG_FILES_OPT = parser.accepts("configFile", "Config file (xxx-site.xml). May be specified several times").withRequiredArg().describedAs("xxxx-site.xml").ofType(String.class);
 	
@@ -57,6 +58,7 @@ public class Parameters {
 	static OptionSpec<String> KEYTAB_OPT = parser.accepts("keytab", "Keytyab file path").withRequiredArg().describedAs("keytab_file").ofType(String.class);
 
 	static OptionSpec<String> DUMP_CONFIG_FILE_OPT = parser.accepts("dumpConfigFile", "Debuging purpose: All HBaseConfiguration will be dumped in this file").withRequiredArg().describedAs("dump_file").ofType(String.class);
+	static OptionSpec<String> REPORT_FILE_OPT = parser.accepts("reportFile", "Allow tracking of performed operation and migration still to perform").withRequiredArg().describedAs("report_file").ofType(String.class);
 
 
 	
@@ -82,6 +84,7 @@ public class Parameters {
 			this.principal = result.valueOf(PRINCIPAL_OPT);
 			this.keytab = result.valueOf(KEYTAB_OPT);
 			this.dumpConfigFile = result.valueOf(DUMP_CONFIG_FILE_OPT);
+			this.reportFile = result.valueOf(REPORT_FILE_OPT);
 			this.configFiles = result.valuesOf(CONFIG_FILES_OPT);
 		} catch (OptionException | MyOptionException t) {
 			throw new ConfigurationException(usage(t.getMessage()));
@@ -112,7 +115,7 @@ public class Parameters {
 		return inputFile;
 	}
 
-	public State getDefaultState() {
+	public YamlState getDefaultState() {
 		return defaultState;
 	}
 
@@ -130,6 +133,10 @@ public class Parameters {
 
 	public List<String> getConfigFiles() {
 		return configFiles;
+	}
+
+	public String getReportFile() {
+		return reportFile;
 	}
 
 	

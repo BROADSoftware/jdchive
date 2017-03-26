@@ -13,19 +13,24 @@ import org.apache.thrift.TException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.kappaware.jdchive.Description.State;
+import com.kappaware.jdchive.yaml.YamlDatabase;
+import com.kappaware.jdchive.yaml.YamlReport;
+import com.kappaware.jdchive.yaml.YamlState;
+
 
 public class DatabaseEngine {
 	static Logger log = LoggerFactory.getLogger(DatabaseEngine.class);
 
 	
 	private Hive hive;
-	private List<Description.Database> databases;
+	private List<YamlDatabase> databases;
 	private URI defaultUri;
+	private YamlReport report;
 	
-	public DatabaseEngine(Hive hive, List<Description.Database> databases) {
-		this.databases = databases;
+	public DatabaseEngine(Hive hive, List<YamlDatabase> databases, YamlReport report) {
 		this.hive = hive;
+		this.databases = databases;
+		this.report = report;
 		this.defaultUri = FileSystem.getDefaultUri(hive.getConf());
 	}
 
@@ -40,8 +45,8 @@ public class DatabaseEngine {
 	
 	int addOperation() throws TException, DescriptionException, HiveException {
 		int nbrModif = 0;
-		for(Description.Database ddb : this.databases) {
-			if(ddb.state == State.present) {
+		for(YamlDatabase ddb : this.databases) {
+			if(ddb.state == YamlState.present) {
 				Database database = this.hive.getDatabase(ddb.name);
 				if(database == null) {
 					this.createDatabase(ddb);
@@ -58,8 +63,8 @@ public class DatabaseEngine {
 
 	int dropOperation() throws TException, DescriptionException, HiveException {
 		int nbrModif = 0;
-		for(Description.Database ddb : this.databases) {
-			if(ddb.state == State.absent) {
+		for(YamlDatabase ddb : this.databases) {
+			if(ddb.state == YamlState.absent) {
 				Database database = this.hive.getDatabase(ddb.name);
 				if(database != null) {
 					this.dropDatabase(ddb);
@@ -70,7 +75,7 @@ public class DatabaseEngine {
 		return nbrModif;
 	}
 
-	private boolean updateDatabase(Database database, com.kappaware.jdchive.Description.Database ddb) throws TException, DescriptionException, HiveException {
+	private boolean updateDatabase(Database database, YamlDatabase ddb) throws TException, DescriptionException, HiveException {
 		log.info(String.format("Found existing %s",database.toString()));
 		boolean changed = false;
 		if (ddb.comment != null && !ddb.comment.equals(database.getDescription())) {
@@ -101,12 +106,12 @@ public class DatabaseEngine {
 		}
 	}
 
-	private void dropDatabase(com.kappaware.jdchive.Description.Database ddb) throws TException, HiveException {
+	private void dropDatabase(YamlDatabase ddb) throws TException, HiveException {
 		log.info(String.format("Will drop database '%s'", ddb.name));
 		this.hive.dropDatabase(ddb.name);
 	}
 
-	private void createDatabase(Description.Database ddb) throws TException, HiveException {
+	private void createDatabase(YamlDatabase ddb) throws TException, HiveException {
 		Database database = new Database(ddb.name, ddb.comment, this.normalizePath(ddb.location), ddb.properties);
 		if(ddb.owner_name != null) {
 			database.setOwnerName(ddb.owner_name);

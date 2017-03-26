@@ -17,7 +17,7 @@ package com.kappaware.jdchive.config;
 
 import java.util.List;
 
-import com.kappaware.jdchive.Description.State;
+import com.kappaware.jdchive.yaml.YamlState;
 
 public class JdcConfigurationImpl implements JdcConfiguration {
 	Parameters parameters;
@@ -34,7 +34,7 @@ public class JdcConfigurationImpl implements JdcConfiguration {
 
 
 	@Override
-	public State getDefaultState() {
+	public YamlState getDefaultState() {
 		return parameters.getDefaultState();
 	}
 
@@ -57,6 +57,11 @@ public class JdcConfigurationImpl implements JdcConfiguration {
 	@Override
 	public List<String> getConfigFiles() {
 		return parameters.getConfigFiles();
+	}
+
+	@Override
+	public String getReportFile() {
+		return parameters.getReportFile();
 	}
 
 

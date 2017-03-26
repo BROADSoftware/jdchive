@@ -7,6 +7,8 @@ import org.apache.hadoop.hive.ql.io.IOConstants;
 import org.apache.hadoop.hive.ql.io.StorageFormatDescriptor;
 import org.apache.hadoop.hive.ql.io.StorageFormatFactory;
 
+import com.kappaware.jdchive.yaml.YamlTable;
+
 
 /**
  * Code adapted from org.apache.hadoop.hive.ql.parse.StorageFormat;
@@ -24,7 +26,7 @@ public class StorageFormatHelper {
 	private String storageHandler;
 	private String serde;
 
-	StorageFormatHelper(HiveConf conf, Description.Table tbl) throws DescriptionException {
+	StorageFormatHelper(HiveConf conf, YamlTable tbl) throws DescriptionException {
 		this.conf = conf;
 		if (tbl.file_format != null) {
 			this.processStorageFormat(tbl.file_format.toString());

@@ -15,10 +15,13 @@
  */
 package com.kappaware.jdchive;
 
+import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.FileReader;
+import java.io.FileWriter;
 import java.io.IOException;
+import java.io.Writer;
 
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hive.conf.HiveConf;
@@ -34,10 +37,14 @@ import org.slf4j.LoggerFactory;
 
 import com.esotericsoftware.yamlbeans.YamlException;
 import com.esotericsoftware.yamlbeans.YamlReader;
+import com.esotericsoftware.yamlbeans.YamlWriter;
 import com.kappaware.jdchive.config.ConfigurationException;
 import com.kappaware.jdchive.config.JdcConfiguration;
 import com.kappaware.jdchive.config.JdcConfigurationImpl;
 import com.kappaware.jdchive.config.Parameters;
+import com.kappaware.jdchive.yaml.YamlDescription;
+import com.kappaware.jdchive.yaml.YamlReport;
+import com.kappaware.jdchive.yaml.YamlUtils;
 
 public class Main {
 	static Logger log = LoggerFactory.getLogger(Main.class);
@@ -47,7 +54,7 @@ public class Main {
 			main2(argv);
 			System.exit(0);
 		} catch (ConfigurationException | DescriptionException | FileNotFoundException | YamlException | InterruptedException | TException | HiveException | CommandNeedRetryException e) {
-			log.error("Error in main():",e);
+			log.error("Error in main():", e);
 			System.err.println("ERROR: " + e.getMessage());
 			System.exit(1);
 		}
@@ -62,12 +69,12 @@ public class Main {
 		if (!file.canRead()) {
 			throw new ConfigurationException(String.format("Unable to open '%s' for reading", file.getAbsolutePath()));
 		}
-		YamlReader yamlReader = new YamlReader(new FileReader(file), Description.getYamlConfig());
-		Description description = yamlReader.read(Description.class);
+		YamlReader yamlReader = new YamlReader(new FileReader(file), YamlUtils.yamlConfig);
+		YamlDescription description = yamlReader.read(YamlDescription.class);
 		description.polish(jdcConfiguration.getDefaultState());
 
 		HiveConf config = new HiveConf();
-		
+
 		for (String cf : jdcConfiguration.getConfigFiles()) {
 			File f = new File(cf);
 			if (!f.canRead()) {
@@ -98,36 +105,47 @@ public class Main {
 			}
 		}
 		config.set("hive.execution.engine", "mr");
-		
 		SessionState ss = new SessionState(config);
-
 		SessionState.setCurrentSessionState(ss);
-		
-		
-		
 		SessionState.start(config);
 		Hive hive = Hive.get();
 		Driver driver = new Driver();
-		
-		DatabaseEngine databaseEngine = new DatabaseEngine(hive, description.databases);
-		
+
+		YamlReport report = new YamlReport();
+
+		DatabaseEngine databaseEngine = new DatabaseEngine(hive, description.databases, report);
+
 		int nbrModif = 0;
-		if(description.databases != null) {
+		if (description.databases != null) {
 			nbrModif += databaseEngine.addOperation();
 		}
-		
-		if(description.tables != null) {
-			nbrModif += (new TableEngine(hive, driver, description.tables)).run();
+
+		if (description.tables != null) {
+			nbrModif += (new TableEngine(hive, driver, description.tables, report)).run();
 		}
 
-		if(description.databases != null) {
+		if (description.databases != null) {
 			nbrModif += databaseEngine.dropOperation();
+		}
+		if (Utils.hasText(jdcConfiguration.getReportFile())) {
+			Writer out = null;
+			try {
+				out = new BufferedWriter(new FileWriter(jdcConfiguration.getReportFile(), false));
+				out.write("# jdchive generated file.\n\n");
+				YamlWriter yamlWriter = new YamlWriter(out, YamlUtils.yamlConfig);
+				yamlWriter.write(report);
+				yamlWriter.close();
+			} finally {
+				if (out != null) {
+					out.close();
+				}
+			}
+			log.info(String.format("Report file:'%s' has been generated", jdcConfiguration.getReportFile()));
 		}
 
 		String m = String.format("jdchive: %d modification(s)", nbrModif);
 		System.out.println(m);
 		log.info(m);
-
 
 	}
 }

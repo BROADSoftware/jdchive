@@ -9,6 +9,9 @@ import org.junit.Test;
 import com.esotericsoftware.yamlbeans.YamlException;
 import com.esotericsoftware.yamlbeans.YamlReader;
 import com.esotericsoftware.yamlbeans.YamlReader.YamlReaderException;
+import com.kappaware.jdchive.yaml.YamlDescription;
+import com.kappaware.jdchive.yaml.YamlState;
+import com.kappaware.jdchive.yaml.YamlUtils;
 
 
 public class BooleanTest {
@@ -19,9 +22,9 @@ public class BooleanTest {
 	public void test1() throws FileNotFoundException, YamlException, DescriptionException {
 		String file = this.getClass().getClassLoader().getResource("test1.yml").getFile();
 		
-		YamlReader yamlReader = new YamlReader(new FileReader(file), Description.getYamlConfig());
-		Description description = yamlReader.read(Description.class);
-		description.polish(Description.State.absent);
+		YamlReader yamlReader = new YamlReader(new FileReader(file), YamlUtils.yamlConfig);
+		YamlDescription description = yamlReader.read(YamlDescription.class);
+		description.polish(YamlState.absent);
 		
 		Assert.assertEquals(description.tables.get(0).name, "test1");
 		Assert.assertFalse(description.tables.get(0).external.booleanValue());
@@ -39,9 +42,9 @@ public class BooleanTest {
 	public void test2() throws FileNotFoundException, YamlException, DescriptionException {
 		String file = this.getClass().getClassLoader().getResource("test2.yml").getFile();
 		
-		YamlReader yamlReader = new YamlReader(new FileReader(file), Description.getYamlConfig());
+		YamlReader yamlReader = new YamlReader(new FileReader(file), YamlUtils.yamlConfig);
 		try {
-			Description description = yamlReader.read(Description.class);		description.polish(Description.State.absent);
+			YamlDescription description = yamlReader.read(YamlDescription.class);		description.polish(YamlState.absent);
 		} catch(YamlReaderException e) {
 			// Fine
 			return;

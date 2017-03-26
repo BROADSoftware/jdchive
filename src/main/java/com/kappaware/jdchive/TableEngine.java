@@ -8,7 +8,6 @@ import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hive.metastore.TableType;
 import org.apache.hadoop.hive.metastore.api.FieldSchema;
-import org.apache.hadoop.hive.metastore.api.InvalidOperationException;
 import org.apache.hadoop.hive.ql.CommandNeedRetryException;
 import org.apache.hadoop.hive.ql.Driver;
 import org.apache.hadoop.hive.ql.metadata.Hive;
@@ -19,7 +18,12 @@ import org.apache.thrift.TException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.kappaware.jdchive.Description.State;
+import com.kappaware.jdchive.yaml.YamlBool;
+import com.kappaware.jdchive.yaml.YamlField;
+import com.kappaware.jdchive.yaml.YamlReport;
+import com.kappaware.jdchive.yaml.YamlState;
+import com.kappaware.jdchive.yaml.YamlTable;
+
 
 public class TableEngine {
 	static Logger log = LoggerFactory.getLogger(TableEngine.class);
@@ -27,13 +31,15 @@ public class TableEngine {
 	
 	private Hive hive;
 	private Driver driver;
-	private List<Description.Table> tables;
+	private List<YamlTable> tables;
+	private YamlReport report;
 	private URI defaultUri;
 	
-	public TableEngine(Hive hive, Driver driver, List<Description.Table> tables) {
+	public TableEngine(Hive hive, Driver driver, List<YamlTable> tables, YamlReport report) {
 		this.hive = hive;
 		this.driver = driver;
 		this.tables = tables;
+		this.report = report;
 		this.defaultUri = FileSystem.getDefaultUri(hive.getConf());
 	}
 
@@ -48,15 +54,15 @@ public class TableEngine {
 	
 	int run() throws TException, DescriptionException, HiveException, CommandNeedRetryException {
 		int nbrModif = 0;
-		for(Description.Table dTable : this.tables) {
+		for(YamlTable dTable : this.tables) {
 			Table table = this.hive.getTable(dTable.database, dTable.name, false);
 			if(table == null) {
-				if(dTable.state == State.present) {
+				if(dTable.state == YamlState.present) {
 					this.createTable(dTable);
 					nbrModif++;
 				} // Else nothing to do
 			} else {
-				if(dTable.state == State.absent) {
+				if(dTable.state == YamlState.absent) {
 					this.dropTable(dTable);
 					nbrModif++;
 				} else {
@@ -70,29 +76,29 @@ public class TableEngine {
 		return nbrModif;
 	}
 
-	private boolean updateTable(Table table, Description.Table tgtTable) throws InvalidOperationException, HiveException {
+	private boolean updateTable(Table table, YamlTable tgtTable) throws CommandNeedRetryException {
 		log.info(String.format("Found existing table: %s", table.toString()));
 		List<String> changes = new Vector<String>();
 		
 		int migration = 0;
-		Description.Table oTable = new Description.Table();
+		YamlTable oTable = new YamlTable();
 		oTable.name = table.getTableName();
 		oTable.database = table.getDbName();
-		oTable.external = new Description.MBool(table.getTableType() == TableType.EXTERNAL_TABLE);
+		oTable.external = new YamlBool(table.getTableType() == TableType.EXTERNAL_TABLE);
 		oTable.owner = table.getOwner();
 		oTable.comment = table.getParameters().get("comment");
 		oTable.location = table.getDataLocation().toString();
 		oTable.properties = table.getParameters();
-		oTable.fields = new Vector<Description.Field>();
+		oTable.fields = new Vector<YamlField>();
 		for (FieldSchema field : table.getCols()) {
-			Description.Field f = new Description.Field();
+			YamlField f = new YamlField();
 			f.name = field.getName();
 			f.type = field.getType();
 			f.comment = field.getComment();
 			oTable.fields.add(f);
 		}
 		
-		Description.Table diffTable = new Description.Table();
+		YamlTable diffTable = new YamlTable();
 		diffTable.name = table.getTableName();
 		diffTable.database = table.getDbName();
 		
@@ -109,7 +115,7 @@ public class TableEngine {
 				if(!Utils.isEqual(oTable.fields.get(i).comment, tgtTable.fields.get(i).comment)) {
 					oTable.fields.get(i).comment = tgtTable.fields.get(i).comment;
 					table.getCols().get(i).setComment(tgtTable.fields.get(i).comment);
-					changes.add(String.format("ALTER TABLE %s.%s CHANGE COLUMN %s %s %s COMMENT %s", table.getDbName(), table.getTableName(), oTable.fields.get(i).name, oTable.fields.get(i).name, oTable.fields.get(i).type, oTable.fields.get(i).comment));
+					changes.add(String.format("ALTER TABLE %s.%s CHANGE COLUMN %s %s %s COMMENT '%s'", table.getDbName(), table.getTableName(), oTable.fields.get(i).name, oTable.fields.get(i).name, oTable.fields.get(i).type, oTable.fields.get(i).comment));
 				}
 			} else {
 				changedFields++;
@@ -141,27 +147,50 @@ public class TableEngine {
 				changes.add(String.format("ALTER TABLE %s.%s SET TBLPROPERTIES ('%s' = '%s')", table.getDbName(), table.getTableName(), keyp, tgtTable.properties.get(keyp)));
 			} 
 		}
-		//log.info("table:\n" + oTable.toYaml());
-		if(migration > 0) {
-			log.info("MIGRATION: old:\n%s\ntarget:\n%s\nDiff:\n%s\n" + oTable.toYaml(), tgtTable.toYaml(), diffTable.toYaml());
+		
+		if(changes.size() > 0 && (migration == 0 || !tgtTable.droppable.booleanValue())) {
+			for(String cmd : changes) {
+				log.info(String.format("Will perform '%s'", cmd));
+				CommandProcessorResponse   ret = this.driver.run(cmd, false);
+				this.report.done.commands.add(cmd);
+				log.info(String.format("Response: %s", ret.toString()));
+			}
+			return true;
 		}
-		return changes.size() > 0;
+		if(migration > 0) {
+			if(tgtTable.droppable.booleanValue()) {
+				this.dropTable(tgtTable);
+				this.createTable(tgtTable);
+				return true;
+			} else {
+				YamlReport.TableMigration tm = new YamlReport.TableMigration(oTable, tgtTable, diffTable);
+				this.report.todo.tableMigrations.add(tm);
+				return false;
+			}
+		} else {
+			return false;
+		}
 	}
 
 
-	private void dropTable(com.kappaware.jdchive.Description.Table dTable) throws HiveException {
+	private void dropTable(YamlTable dTable) throws CommandNeedRetryException {
 		log.info(String.format("Will drop table '%s.%s'", dTable.database, dTable.name));
-		this.hive.dropTable(dTable.database, dTable.name);
+		String cmd = String.format("DROP TABLE %s.%s", dTable.database, dTable.name);
+		log.info(String.format("Will perform '%s'", cmd));
+		CommandProcessorResponse   ret = this.driver.run(cmd, false);
+		this.report.done.commands.add(cmd);
+		log.info(String.format("Response: %s", ret.toString()));
+		//this.hive.dropTable(dTable.database, dTable.name);
 	}
 
-	private void createTable(Description.Table dTable) throws TException, DescriptionException, HiveException, CommandNeedRetryException {
+	private void createTable(YamlTable dTable) throws CommandNeedRetryException {
 		StringBuffer sb = new StringBuffer();
 		sb.append(String.format("CREATE %s TABLE %s.%s (", (dTable.external.booleanValue() ? "EXTERNAL" : ""), dTable.database, dTable.name));
 		String sep = "";
-		for(Description.Field field : dTable.fields) {
+		for(YamlField field : dTable.fields) {
 			sb.append(String.format("%s %s %s", sep, field.name, field.type));
 			if(field.comment != null) {
-				sb.append("'" + field.comment + "'");
+				sb.append(" COMMENT '" + field.comment + "'");
 			}
 			sep = ",";
 		}
@@ -184,53 +213,8 @@ public class TableEngine {
 		String cmd = sb.toString();
 		log.info(String.format("Will perform '%s'", cmd));
 		CommandProcessorResponse   ret = this.driver.run(cmd, false);
+		this.report.done.commands.add(cmd);
 		log.info(String.format("Response: %s", ret.toString()));
 	}
 
-
-	@SuppressWarnings("unused")
-	private void createTable2(Description.Table dTable) throws TException, DescriptionException, HiveException {
-		log.info(String.format("Will create new table %s.%s", dTable.database, dTable.name));
-		Table table = new Table(dTable.database, dTable.name);
-		if(dTable.owner != null) {
-			table.setOwner(dTable.owner);
-		}
-		//table.setParamters(dTable.properties); // Does not works, as some jar fixed the type
-		table.getTTable().setParameters(dTable.properties);
-		if(dTable.comment != null) {
-			table.setProperty("comment", dTable.comment);
-		}
-		if(dTable.external.booleanValue()) {
-			table.setTableType(TableType.EXTERNAL_TABLE);
-			table.setProperty("EXTERNAL", "TRUE");
-		} else {
-			table.setTableType(TableType.MANAGED_TABLE);
-		}
-		List<FieldSchema> fields = new Vector<FieldSchema>();
-		for(Description.Field f : dTable.fields) {
-			fields.add(new FieldSchema(f.name, f.type, f.comment));
-		}
-		table.setFields(fields);
-		if(dTable.location != null) {
-			table.setDataLocation(new Path(this.normalizePath(dTable.location)));
-		}
-		
-		StorageFormatHelper sfHelper = new StorageFormatHelper(this.hive.getConf(), dTable);
-		if(sfHelper.getInputFormat() != null) {
-			table.setInputFormatClass(sfHelper.getInputFormat());
-			table.setOutputFormatClass(sfHelper.getOutputFormat());
-		}
-		if(sfHelper.getSerde() != null) {
-			table.setSerializationLib(sfHelper.getSerde());
-		}
-		if(sfHelper.getStorageHandler() != null) {
-			table.getParameters().put("storage_handler", sfHelper.getStorageHandler());
-		}
-		for(String key : dTable.serde_properties.keySet()) {
-			table.setSerdeParam(key, dTable.serde_properties.get(key));
-		}
-		this.hive.createTable(table);
-	}
-
-	
 }
