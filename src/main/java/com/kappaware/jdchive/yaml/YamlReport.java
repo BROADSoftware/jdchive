@@ -24,9 +24,11 @@ public class YamlReport {
 	
 	static public class Todo {
 		public List<TableMigration> tableMigrations;
+		public List<DatabaseMigration> databaseMigrations;
 		
 		public Todo() {
 			this.tableMigrations = new Vector<TableMigration>();
+			this.databaseMigrations = new Vector<DatabaseMigration>();
 		}
 	}
 	
@@ -35,16 +37,42 @@ public class YamlReport {
 		public YamlTable existing;
 		public YamlTable target;
 		public YamlTable diff;
+		public Long existingFingerprint;
+		public Long targetFingerprint;
+		public Long diffFingerprint;
 		
-		public TableMigration(YamlTable existing, YamlTable target, YamlTable diff) {
+		public TableMigration(YamlTable existing, YamlTable target, YamlTable diff) throws JsonProcessingException {
 			this.existing = existing;
 			this.target = target;
 			this.diff = diff;
+			this.existingFingerprint = existing.computeFingerprint();
+			this.targetFingerprint = target.computeFingerprint();
+			this.diffFingerprint = diff.computeFingerprint();
+		}
+	}
+	
+	
+	static public class DatabaseMigration {
+		public YamlDatabase existing;
+		public YamlDatabase target;
+		public YamlDatabase diff;
+		public Long existingFingerprint;
+		public Long targetFingerprint;
+		public Long diffFingerprint;
+		
+		public DatabaseMigration(YamlDatabase existing, YamlDatabase target, YamlDatabase diff) throws JsonProcessingException {
+			this.existing = existing;
+			this.target = target;
+			this.diff = diff;
+			this.existingFingerprint = existing.computeFingerprint();
+			this.targetFingerprint = target.computeFingerprint();
+			this.diffFingerprint = diff.computeFingerprint();
 		}
 	}
 	
 	public String toYaml() throws JsonProcessingException {
 		return YamlUtils.yaml2String(this);
 	}
+
 	
 }

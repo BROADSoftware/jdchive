@@ -9,14 +9,14 @@ import com.kappaware.jdchive.DescriptionException;
 public class YamlDatabase {
 
 	public enum OwnerType {
-		user, group, role, USER, GROUP, ROLE
+		USER, GROUP, ROLE
 	}
 
 	
 	public String name;
 	public Map<String, String> properties;
 	public String location;
-	public String owner_name;
+	public String owner;
 	public OwnerType owner_type;
 	public String comment;
 	public YamlState state;
@@ -28,10 +28,7 @@ public class YamlDatabase {
 		if ("default".equals(this.name)) {
 			throw new DescriptionException("Can't alter 'default' database");
 		}
-		if (this.location == null) {
-			throw new DescriptionException(String.format("Invalid description: Database '%s' is missing 'location' attribute", this.name));
-		}
-		if (!this.location.startsWith("/")) {
+		if (this.location != null && !this.location.startsWith("/")) {
 			throw new DescriptionException(String.format("Invalid description: Database '%s' location must be absolute", this.name));
 		}
 		if (this.properties == null) {
@@ -40,9 +37,25 @@ public class YamlDatabase {
 		if (this.state == null) {
 			this.state = defaultState;
 		}
+		if(owner != null && this.owner_type == null) {
+			throw new DescriptionException(String.format("Invalid description for database '%s'. If an owner is defined, then owner_type (USER|GROUP|ROLE) must be also!", this.name));
+		}
 	}
 	
 	public String toYaml() throws JsonProcessingException {
 		return YamlUtils.yaml2String(this);
+	}
+
+	public Long computeFingerprint() throws JsonProcessingException {
+		String yaml = this.toYaml();
+		return Math.abs(hashcode(yaml));
+	}
+	
+	static private long hashcode(String s) {
+		long h = 0;
+		for(int i = 0; i < s.length(); i++) {
+			h = 31 * h + s.charAt(i);
+		}
+		return h;
 	}
 }

@@ -1,128 +1,125 @@
 package com.kappaware.jdchive;
 
-import java.net.URI;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Vector;
+import java.util.Map.Entry;
 
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hive.metastore.api.Database;
-import org.apache.hadoop.hive.metastore.api.PrincipalType;
-import org.apache.hadoop.hive.ql.metadata.Hive;
+import org.apache.hadoop.hive.ql.CommandNeedRetryException;
+import org.apache.hadoop.hive.ql.Driver;
 import org.apache.hadoop.hive.ql.metadata.HiveException;
 import org.apache.thrift.TException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.kappaware.jdchive.yaml.YamlDatabase;
 import com.kappaware.jdchive.yaml.YamlReport;
+import com.kappaware.jdchive.yaml.YamlReport.DatabaseMigration;
 import com.kappaware.jdchive.yaml.YamlState;
 
-
-public class DatabaseEngine {
+public class DatabaseEngine extends BaseEngine {
 	static Logger log = LoggerFactory.getLogger(DatabaseEngine.class);
 
-	
-	private Hive hive;
-	private List<YamlDatabase> databases;
-	private URI defaultUri;
-	private YamlReport report;
-	
-	public DatabaseEngine(Hive hive, List<YamlDatabase> databases, YamlReport report) {
-		this.hive = hive;
-		this.databases = databases;
-		this.report = report;
-		this.defaultUri = FileSystem.getDefaultUri(hive.getConf());
+	public DatabaseEngine(Driver driver, YamlReport report) throws HiveException {
+		super(driver, report);
 	}
 
-	
-	private String normalizePath(String path) {
-		if(path.startsWith("hdfs:")) {
-			return path;
-		} else {
-			return Path.mergePaths(new Path(this.defaultUri), new Path(path)).toString();
-		}
-	}
-	
-	int addOperation() throws TException, DescriptionException, HiveException {
-		int nbrModif = 0;
-		for(YamlDatabase ddb : this.databases) {
-			if(ddb.state == YamlState.present) {
+
+	void addOperation(List<YamlDatabase> databases) throws TException, DescriptionException, HiveException, CommandNeedRetryException, JsonProcessingException {
+		for (YamlDatabase ddb : databases) {
+			if (ddb.state == YamlState.present) {
 				Database database = this.hive.getDatabase(ddb.name);
-				if(database == null) {
+				if (database == null) {
 					this.createDatabase(ddb);
-					nbrModif++;
-				} else { 
-					if(this.updateDatabase(database, ddb)) {
-						nbrModif++;
-					}
+				} else {
+					log.info(String.format("Found existing %s", database.toString()));
+					this.updateDatabase(database, ddb);
 				}
 			}
 		}
-		return nbrModif;
 	}
 
-	int dropOperation() throws TException, DescriptionException, HiveException {
-		int nbrModif = 0;
-		for(YamlDatabase ddb : this.databases) {
-			if(ddb.state == YamlState.absent) {
+	void dropOperation(List<YamlDatabase> databases) throws CommandNeedRetryException, HiveException {
+		for (YamlDatabase ddb : databases) {
+			if (ddb.state == YamlState.absent) {
 				Database database = this.hive.getDatabase(ddb.name);
-				if(database != null) {
+				if (database != null) {
 					this.dropDatabase(ddb);
-					nbrModif++;
 				}
 			}
 		}
-		return nbrModif;
 	}
 
-	private boolean updateDatabase(Database database, YamlDatabase ddb) throws TException, DescriptionException, HiveException {
-		log.info(String.format("Found existing %s",database.toString()));
-		boolean changed = false;
-		if (ddb.comment != null && !ddb.comment.equals(database.getDescription())) {
-			throw new DescriptionException(String.format("Database '%s': Description can't be changed ('%s' != '%s')", ddb.name, ddb.comment, database.getDescription()));
+	private void updateDatabase(Database database, YamlDatabase target) throws TException, DescriptionException, HiveException, CommandNeedRetryException, JsonProcessingException {
+		YamlDatabase original = new YamlDatabase();
+		original.name = database.getName();
+		original.comment = database.getDescription();
+		original.location = database.getLocationUri();
+		original.owner = database.getOwnerName();
+		original.owner_type = YamlDatabase.OwnerType.valueOf(database.getOwnerType().toString());
+		original.properties = database.getParameters();
+		if(original.properties == null) {
+			original.properties = new HashMap<String, String>();
 		}
-		if(ddb.owner_name != null && ! ddb.owner_name.equals(database.getOwnerName())) {
-			database.setOwnerName(ddb.owner_name);
-			changed = true;
+		target.location = this.normalizePath(target.location);
+		YamlDatabase diff = new YamlDatabase();
+		diff.name = target.name;
+		
+		List<String> changes = new Vector<String>();
+		int migration = 0;
+		if(target.comment != null && !target.comment.equals(original.comment)) {
+			diff.comment = target.comment;
+			migration++;
 		}
-		if(ddb.owner_type != null && ! ddb.owner_type.toString().equalsIgnoreCase(database.getOwnerType().toString())) {
-			database.setOwnerType(PrincipalType.valueOf(ddb.owner_type.toString().toUpperCase()));
-			changed = true;
+		if(target.location != null && !target.location.equals(original.location)) {
+			diff.location = target.location;
+			migration++;
 		}
-		String location = this.normalizePath(ddb.location);
-		if(!database.getLocationUri().equals(location)) {
-			throw new DescriptionException(String.format("Database '%s': Location can't be changed ('%s' != '%s')", ddb.name, location, database.getLocationUri()));
+		if(target.owner != null && (!target.owner.equals(original.owner) || !target.owner_type.equals(original.owner_type)) ) {
+			changes.add(String.format("ALTER DATABASE %s SET OWNER %s %s", target.name, target.owner_type.toString(), target.owner));
 		}
-		if(!Utils.isEqual(ddb.properties, database.getParameters())) {
-			database.setParameters(ddb.properties);
-			changed = true;
+		for (Entry<String, String> entry : target.properties.entrySet()) {
+			if(!Utils.isEqual(entry.getValue(), original.properties.get(entry.getKey()))) {
+				changes.add(String.format("ALTER DATABASE %s SET DBPROPERTIES ( '%s'='%s' )", target.name, entry.getKey(), entry.getValue()));
+			}
 		}
-		if(changed) {
-			log.info(String.format("Will alter %s", database.toString()));
-			this.hive.alterDatabase(ddb.name, database);
-			return true;
-		} else {
-			return false;
+		this.performCmds(changes);
+		if(migration > 0) {
+			report.todo.databaseMigrations.add(new DatabaseMigration(original, target, diff));
 		}
+		
 	}
 
-	private void dropDatabase(YamlDatabase ddb) throws TException, HiveException {
-		log.info(String.format("Will drop database '%s'", ddb.name));
-		this.hive.dropDatabase(ddb.name);
+	private void dropDatabase(YamlDatabase ddb) throws CommandNeedRetryException {
+		this.performCmd(String.format("DROP DATABASE %s RESTRICT", ddb.name));
 	}
 
-	private void createDatabase(YamlDatabase ddb) throws TException, HiveException {
-		Database database = new Database(ddb.name, ddb.comment, this.normalizePath(ddb.location), ddb.properties);
-		if(ddb.owner_name != null) {
-			database.setOwnerName(ddb.owner_name);
+	private void createDatabase(YamlDatabase ddb) throws CommandNeedRetryException {
+		StringBuffer sb = new StringBuffer();
+		sb.append(String.format("CREATE DATABASE %s", ddb.name));
+		if (ddb.comment != null) {
+			sb.append(String.format(" COMMENT '%s'", ddb.comment));
 		}
-		if(ddb.owner_type != null) {
-			database.setOwnerType(PrincipalType.valueOf(ddb.owner_type.toString().toUpperCase()));
+		if (ddb.location != null) {
+			sb.append(String.format(" LOCATION '%s'", this.normalizePath(ddb.location)));
 		}
-		log.info(String.format("Will create new %s", database));
-		this.hive.createDatabase(database);
+		if (ddb.properties.size() > 0) {
+			String sep = "";
+			sb.append(" WITH DBPROPERTIES (");
+			for (Entry<String, String> entry : ddb.properties.entrySet()) {
+				sb.append(String.format("%s '%s'='%s'", sep, entry.getKey(), entry.getValue()));
+				sep = ",";
+			}
+			sb.append(")");
+		}
+		this.performCmd(sb.toString());
+		if (ddb.owner != null) {
+			String cmd = String.format("ALTER DATABASE %s SET OWNER %s %s", ddb.name, ddb.owner_type.toString(), ddb.owner);
+			this.performCmd(cmd);
+		}
 	}
 	
-	
-	
+
 }

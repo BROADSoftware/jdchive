@@ -66,6 +66,22 @@ public class YamlTable {
 			return YamlUtils.yaml2String(this);
 		}
 		
+		public Long computeFingerprint() throws JsonProcessingException {
+			// Fingerprint must be database name independant
+			String db = this.database;
+			this.database = null;
+			String yaml = this.toYaml();
+			this.database = db;
+			return Math.abs(hashcode(yaml));
+		}
+		
+		static private long hashcode(String s) {
+			long h = 0;
+			for(int i = 0; i < s.length(); i++) {
+				h = 31 * h + s.charAt(i);
+			}
+			return h;
+		}
 		
 	}
 

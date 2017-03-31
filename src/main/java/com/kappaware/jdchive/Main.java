@@ -25,7 +25,6 @@ import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hive.conf.HiveConf;
 import org.apache.hadoop.hive.ql.CommandNeedRetryException;
 import org.apache.hadoop.hive.ql.Driver;
-import org.apache.hadoop.hive.ql.metadata.Hive;
 import org.apache.hadoop.hive.ql.metadata.HiveException;
 import org.apache.hadoop.hive.ql.session.SessionState;
 import org.apache.hadoop.security.UserGroupInformation;
@@ -46,17 +45,16 @@ public class Main {
 
 	static public void main(String[] argv) throws IOException {
 		try {
-			main2(argv);
-			System.exit(0);
+			System.exit(main2(argv));
 		} catch (ConfigurationException | DescriptionException | InterruptedException | TException | HiveException | CommandNeedRetryException e) {
 			log.error("Error in main():", e);
 			System.err.println("ERROR: " + e.getMessage());
-			System.exit(1);
+			System.exit(2);
 		}
 	}
 
-	static public void main2(String[] argv) throws ConfigurationException, DescriptionException, IOException, InterruptedException, TException, HiveException, CommandNeedRetryException {
-		log.info("jdchtable start");
+	static public int main2(String[] argv) throws ConfigurationException, DescriptionException, IOException, InterruptedException, TException, HiveException, CommandNeedRetryException {
+		log.info("jdchive start");
 
 		JdcConfiguration jdcConfiguration = new JdcConfigurationImpl(new Parameters(argv));
 		File file = new File(jdcConfiguration.getInputFile());
@@ -102,24 +100,22 @@ public class Main {
 		SessionState ss = new SessionState(config);
 		SessionState.setCurrentSessionState(ss);
 		SessionState.start(config);
-		Hive hive = Hive.get();
 		Driver driver = new Driver();
 
 		YamlReport report = new YamlReport();
 
-		DatabaseEngine databaseEngine = new DatabaseEngine(hive, description.databases, report);
+		DatabaseEngine databaseEngine = new DatabaseEngine(driver, report);
 
-		int nbrModif = 0;
 		if (description.databases != null) {
-			nbrModif += databaseEngine.addOperation();
+			databaseEngine.addOperation(description.databases);
 		}
 
 		if (description.tables != null) {
-			nbrModif += (new TableEngine(hive, driver, description.tables, report)).run();
+			(new TableEngine(driver, report)).run(description.tables);
 		}
 
 		if (description.databases != null) {
-			nbrModif += databaseEngine.dropOperation();
+			databaseEngine.dropOperation(description.databases);
 		}
 		if (Utils.hasText(jdcConfiguration.getReportFile())) {
 			Writer out = null;
@@ -136,10 +132,10 @@ public class Main {
 			}
 			log.info(String.format("Report file:'%s' has been generated", jdcConfiguration.getReportFile()));
 		}
-
-		String m = String.format("jdchive: %d modification(s)", nbrModif);
-		System.out.println(m);
-		log.info(m);
-
+		int migrations = report.todo.databaseMigrations.size() + report.todo.tableMigrations.size();
+		String m1 = String.format("jdchive: %d modification(s)   %s migration(s)", report.done.commands.size(), migrations) ;
+		System.out.println(m1);
+		log.info(m1);
+		return migrations > 0 ? 1 : 0;
 	}
 }
