@@ -17,8 +17,6 @@ package com.kappaware.jdchive;
 
 import java.io.BufferedWriter;
 import java.io.File;
-import java.io.FileNotFoundException;
-import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.io.Writer;
@@ -35,9 +33,6 @@ import org.apache.thrift.TException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.esotericsoftware.yamlbeans.YamlException;
-import com.esotericsoftware.yamlbeans.YamlReader;
-import com.esotericsoftware.yamlbeans.YamlWriter;
 import com.kappaware.jdchive.config.ConfigurationException;
 import com.kappaware.jdchive.config.JdcConfiguration;
 import com.kappaware.jdchive.config.JdcConfigurationImpl;
@@ -53,7 +48,7 @@ public class Main {
 		try {
 			main2(argv);
 			System.exit(0);
-		} catch (ConfigurationException | DescriptionException | FileNotFoundException | YamlException | InterruptedException | TException | HiveException | CommandNeedRetryException e) {
+		} catch (ConfigurationException | DescriptionException | InterruptedException | TException | HiveException | CommandNeedRetryException e) {
 			log.error("Error in main():", e);
 			System.err.println("ERROR: " + e.getMessage());
 			System.exit(1);
@@ -69,8 +64,7 @@ public class Main {
 		if (!file.canRead()) {
 			throw new ConfigurationException(String.format("Unable to open '%s' for reading", file.getAbsolutePath()));
 		}
-		YamlReader yamlReader = new YamlReader(new FileReader(file), YamlUtils.yamlConfig);
-		YamlDescription description = yamlReader.read(YamlDescription.class);
+		YamlDescription description = YamlUtils.parse(file, YamlDescription.class);
 		description.polish(jdcConfiguration.getDefaultState());
 
 		HiveConf config = new HiveConf();
@@ -132,9 +126,9 @@ public class Main {
 			try {
 				out = new BufferedWriter(new FileWriter(jdcConfiguration.getReportFile(), false));
 				out.write("# jdchive generated file.\n\n");
-				YamlWriter yamlWriter = new YamlWriter(out, YamlUtils.yamlConfig);
-				yamlWriter.write(report);
-				yamlWriter.close();
+				String x = YamlUtils.yaml2String(report);
+				out.write(x);
+				//YamlUtils.writeYaml(out, report);
 			} finally {
 				if (out != null) {
 					out.close();

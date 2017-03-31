@@ -3,6 +3,7 @@ package com.kappaware.jdchive.yaml;
 import java.util.HashMap;
 import java.util.Map;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.kappaware.jdchive.DescriptionException;
 
 public class YamlDatabase {
@@ -41,7 +42,7 @@ public class YamlDatabase {
 		}
 	}
 	
-	public String toYaml() {
-		return YamlUtils.toYamlString(this);
+	public String toYaml() throws JsonProcessingException {
+		return YamlUtils.yaml2String(this);
 	}
 }

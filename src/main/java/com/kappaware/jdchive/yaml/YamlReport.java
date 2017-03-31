@@ -3,6 +3,8 @@ package com.kappaware.jdchive.yaml;
 import java.util.List;
 import java.util.Vector;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+
 public class YamlReport {
 	public Done done;
 	public Todo todo;
@@ -41,8 +43,8 @@ public class YamlReport {
 		}
 	}
 	
-	public String toYaml() {
-		return YamlUtils.toYamlString(this);
+	public String toYaml() throws JsonProcessingException {
+		return YamlUtils.yaml2String(this);
 	}
 	
 }

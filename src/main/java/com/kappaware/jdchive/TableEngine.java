@@ -18,7 +18,6 @@ import org.apache.thrift.TException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.kappaware.jdchive.yaml.YamlBool;
 import com.kappaware.jdchive.yaml.YamlField;
 import com.kappaware.jdchive.yaml.YamlReport;
 import com.kappaware.jdchive.yaml.YamlState;
@@ -84,7 +83,7 @@ public class TableEngine {
 		YamlTable oTable = new YamlTable();
 		oTable.name = table.getTableName();
 		oTable.database = table.getDbName();
-		oTable.external = new YamlBool(table.getTableType() == TableType.EXTERNAL_TABLE);
+		oTable.external = new Boolean(table.getTableType() == TableType.EXTERNAL_TABLE);
 		oTable.owner = table.getOwner();
 		oTable.comment = table.getParameters().get("comment");
 		oTable.location = table.getDataLocation().toString();

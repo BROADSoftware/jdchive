@@ -5,18 +5,19 @@ import java.util.List;
 import java.util.Map;
 import java.util.Vector;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.kappaware.jdchive.DescriptionException;
 
 public class YamlTable {
 		public String name;
 		public String database;
-		public YamlBool external;
+		public Boolean external;
 		public List<YamlField> fields;
 		public String owner;		// TODO: Remove ?
 		public String comment;
 		public String location;
 		public Map<String, String> properties;
-		public YamlBool droppable;
+		public Boolean droppable;
 
 		
 		
@@ -36,10 +37,10 @@ public class YamlTable {
 				throw new DescriptionException(String.format("Invalid description: Table '%s' is missing database attribute!", this.name));
 			}
 			if (this.external == null) {
-				this.external = new YamlBool(false);
+				this.external = false;
 			}
 			if(this.droppable == null) {
-				this.droppable = new YamlBool(this.external.booleanValue());
+				this.droppable = this.external;
 			}
 			if (this.fields == null) {
 				this.fields = new Vector<YamlField>();
@@ -61,8 +62,8 @@ public class YamlTable {
 			}
 		}
 		
-		public String toYaml() {
-			return YamlUtils.toYamlString(this);
+		public String toYaml() throws JsonProcessingException {
+			return YamlUtils.yaml2String(this);
 		}
 		
 		

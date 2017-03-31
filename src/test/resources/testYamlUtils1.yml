@@ -1,0 +1,11 @@
+
+
+
+name: db1
+properties: 
+  prp1: val1
+  prp2: val2
+owner_type: GROUP
+droppable: yes
+tables: 
+ - name: tbl1
