@@ -41,7 +41,7 @@ public class DatabaseEngine extends BaseEngine {
 		}
 	}
 
-	void dropOperation(List<YamlDatabase> databases) throws CommandNeedRetryException, HiveException {
+	void dropOperation(List<YamlDatabase> databases) throws CommandNeedRetryException, HiveException, DescriptionException {
 		for (YamlDatabase ddb : databases) {
 			if (ddb.state == YamlState.absent) {
 				Database database = this.hive.getDatabase(ddb.name);
@@ -92,11 +92,11 @@ public class DatabaseEngine extends BaseEngine {
 		
 	}
 
-	private void dropDatabase(YamlDatabase ddb) throws CommandNeedRetryException {
+	private void dropDatabase(YamlDatabase ddb) throws CommandNeedRetryException, DescriptionException {
 		this.performCmd(String.format("DROP DATABASE %s RESTRICT", ddb.name));
 	}
 
-	private void createDatabase(YamlDatabase ddb) throws CommandNeedRetryException {
+	private void createDatabase(YamlDatabase ddb) throws CommandNeedRetryException, DescriptionException {
 		StringBuffer sb = new StringBuffer();
 		sb.append(String.format("CREATE DATABASE %s", ddb.name));
 		if (ddb.comment != null) {

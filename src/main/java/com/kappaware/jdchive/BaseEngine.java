@@ -43,14 +43,17 @@ public class BaseEngine {
 		}
 	}
 
-	protected void performCmd(String cmd) throws CommandNeedRetryException {
+	protected void performCmd(String cmd) throws CommandNeedRetryException, DescriptionException {
 		log.info(String.format("Will perform '%s'", cmd));
 		CommandProcessorResponse ret = this.driver.run(cmd, false);
+		//log.info(String.format("Response: %s", ret.toString()));
+		if(ret.getResponseCode() != 0) {
+			throw new DescriptionException(String.format("%s", ret.toString()));
+		}
 		this.report.done.commands.add(cmd);
-		log.info(String.format("Response: %s", ret.toString()));
 	}
 
-	protected void performCmds(List<String> cmds) throws CommandNeedRetryException {
+	protected void performCmds(List<String> cmds) throws CommandNeedRetryException, DescriptionException {
 		for(String cmd : cmds) {
 			this.performCmd(cmd);
 		}

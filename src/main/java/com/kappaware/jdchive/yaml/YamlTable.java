@@ -13,22 +13,30 @@ public class YamlTable {
 		public String database;
 		public Boolean external;
 		public List<YamlField> fields;
-		public String owner;		// TODO: Remove ?
 		public String comment;
 		public String location;
 		public Map<String, String> properties;
 		public Boolean droppable;
-
-		
-		
 		public String file_format;
-		public String storage_handler;
 		public String input_format;
 		public String output_format;
+		public Delimited delimited;
 		public String serde;
 		public Map<String, String> serde_properties;
+		public String storage_handler;
+
+		public String owner;		
 		public YamlState state;
 
+		static public class Delimited {
+			public Character fields_terminated_by;
+			public Character fields_escaped_by;
+			public Character collection_item_terminated_by;
+			public Character map_keys_terminated_by;
+			public Character line_terminated_by;
+			public Character null_defined_as;
+		}
+		
 		public void polish(YamlState defaultState) throws DescriptionException {
 			if (this.name == null) {
 				throw new DescriptionException("Invalid description: Every table must have a 'name' attribute");
@@ -52,7 +60,13 @@ public class YamlTable {
 				this.properties = new HashMap<String, String>();
 			}
 			if ((this.input_format == null) != (this.output_format == null)) {
-				throw new DescriptionException(String.format("Invalid description: Table '%s.%s': Both 'inputFormat' and 'outputFormat' must be defined together!", this.database, this.name));
+				throw new DescriptionException(String.format("Invalid description: Table '%s.%s': Both 'input_format' and 'output_format' must be defined together!", this.database, this.name));
+			}
+			if(this.input_format != null && this.file_format != null) {
+				throw new DescriptionException(String.format("Invalid description: Table '%s.%s': Both 'file_format' and 'input/output_format' can't be defined together!", this.database, this.name));
+			}
+			if(this.delimited != null && this.serde != null) {
+				throw new DescriptionException(String.format("Invalid description: Table '%s.%s': Both 'delimited' and 'serde' can't be defined together!", this.database, this.name));
 			}
 			if (this.serde_properties == null) {
 				this.serde_properties = new HashMap<String, String>();
@@ -82,6 +96,5 @@ public class YamlTable {
 			}
 			return h;
 		}
-		
 	}
 
