@@ -167,7 +167,7 @@ public class TableEngine extends BaseEngine {
 		existing.name = table.getTableName();
 		existing.database = table.getDbName();
 		existing.external = new Boolean(table.getTableType() == TableType.EXTERNAL_TABLE);
-		existing.owner = table.getOwner();
+		//existing.owner = table.getOwner();
 		existing.fields = new Vector<YamlField>();
 		for (FieldSchema field : table.getCols()) {
 			YamlField f = new YamlField();
@@ -266,7 +266,7 @@ public class TableEngine extends BaseEngine {
 				} else {
 					// type is changed
 					if (target.alterable) {
-						changes.add(String.format("ALTER TABLE %s.%s CHANGE COLUMN %s %s %s COMMENT '%s'", table.getDbName(), table.getTableName(), existingField.name, targetField.name, targetField.type, targetField.comment));
+						changes.add(String.format("ALTER TABLE %s.%s CHANGE COLUMN %s %s %s %s", table.getDbName(), table.getTableName(), existingField.name, targetField.name, targetField.type, this.commentClause(targetField.comment)));
 					} else {
 						diffTable.fields.add(targetField);
 						migration++;
@@ -278,8 +278,13 @@ public class TableEngine extends BaseEngine {
 			}
 		}
 		for (int i = commonFieldCount; i < target.fields.size(); i++) {
-			diffTable.fields.add(target.fields.get(i));
-			migration++;
+			YamlField targetField = target.fields.get(i);
+			if (target.alterable) {
+				changes.add(String.format("ALTER TABLE %s.%s ADD COLUMNS (%s %s %s)", table.getDbName(), table.getTableName(), targetField.name, targetField.type, this.commentClause(targetField.comment)));
+			} else {
+				diffTable.fields.add(targetField);
+				migration++;
+			}
 		}
 		for (int i = commonFieldCount; i < existing.fields.size(); i++) {
 			diffTable.fields.add(existing.fields.get(i));
@@ -299,8 +304,6 @@ public class TableEngine extends BaseEngine {
 
 			}
 		}
-		// ------------------------------------------------------------------ Handle row format
-
 		// ------------------------------------------------------------------ Handle file format
 		if (Utils.isDifferent(existing.input_format, target.input_format)) {
 			diffTable.input_format = Utils.nullMarker(target.input_format);
@@ -324,7 +327,7 @@ public class TableEngine extends BaseEngine {
 			if (Utils.isDifferent(entry.getValue(), existing.serde_properties.get(entry.getKey()))) {
 				log.debug(String.format("Serde property '%s': target: %s != existing: %s", entry.getKey(), Utils.toDebugString(entry.getValue()), Utils.toDebugString(existing.serde_properties.get(entry.getKey()))));
 				if (target.alterable) {
-					changes.add(String.format("ALTER TABLE %s.%s SET SERDEPROPERTIES ('%s' = '%s')", table.getDbName(), table.getTableName(), entry.getKey(),  StringEscapeUtils.escapeJava(entry.getValue())));
+					changes.add(String.format("ALTER TABLE %s.%s SET SERDEPROPERTIES ('%s' = '%s')", table.getDbName(), table.getTableName(), entry.getKey(), StringEscapeUtils.escapeJava(entry.getValue())));
 				} else {
 					if (diffTable.serde_properties == null) {
 						diffTable.serde_properties = new HashMap<String, String>();
@@ -346,7 +349,7 @@ public class TableEngine extends BaseEngine {
 		for (Map.Entry<String, String> entry : target.properties.entrySet()) {
 			if (Utils.isDifferent(entry.getValue(), existing.properties.get(entry.getKey()))) {
 				if (target.alterable) {
-					changes.add(String.format("ALTER TABLE %s.%s SET TBLPROPERTIES ('%s' = '%s')", table.getDbName(), table.getTableName(), entry.getKey(),  StringEscapeUtils.escapeJava(entry.getValue())));
+					changes.add(String.format("ALTER TABLE %s.%s SET TBLPROPERTIES ('%s' = '%s')", table.getDbName(), table.getTableName(), entry.getKey(), StringEscapeUtils.escapeJava(entry.getValue())));
 				} else {
 					if (diffTable.properties == null) {
 						diffTable.properties = new HashMap<String, String>();
@@ -373,6 +376,14 @@ public class TableEngine extends BaseEngine {
 			}
 		} else {
 			return changes.size() > 0;
+		}
+	}
+
+	private String commentClause(String comment) {
+		if (comment == null) {
+			return "";
+		} else {
+			return String.format(" COMMENT '%s'", comment);
 		}
 	}
 

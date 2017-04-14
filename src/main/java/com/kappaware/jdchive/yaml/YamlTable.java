@@ -16,7 +16,6 @@ public class YamlTable {
 		public String comment;
 		public String location;
 		public Map<String, String> properties;
-		public Boolean droppable;
 		public String file_format;
 		public String input_format;
 		public String output_format;
@@ -24,10 +23,12 @@ public class YamlTable {
 		public String serde;
 		public Map<String, String> serde_properties;
 		public String storage_handler;
-		public Boolean alterable;
 
-		public String owner;		
+		public Boolean alterable;
+		public Boolean droppable;
+
 		public YamlState state;
+		//public String owner;		
 
 		// Note: Two possible notation:  '\t' or '\u0009'
 		static public class Delimited {
