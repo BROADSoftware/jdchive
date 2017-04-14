@@ -22,8 +22,8 @@ import com.kappaware.jdchive.yaml.YamlState;
 public class DatabaseEngine extends BaseEngine {
 	static Logger log = LoggerFactory.getLogger(DatabaseEngine.class);
 
-	public DatabaseEngine(Driver driver, YamlReport report) throws HiveException {
-		super(driver, report);
+	public DatabaseEngine(Driver driver, YamlReport report, boolean dryRun) throws HiveException {
+		super(driver, report, dryRun);
 	}
 
 

@@ -8,6 +8,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.Vector;
 
+import org.apache.hadoop.hive.serde.serdeConstants;
 import org.apache.hadoop.hive.metastore.TableType;
 import org.apache.hadoop.hive.metastore.api.FieldSchema;
 import org.apache.hadoop.hive.ql.CommandNeedRetryException;
@@ -30,12 +31,24 @@ import com.kappaware.jdchive.yaml.YamlReport;
 import com.kappaware.jdchive.yaml.YamlState;
 import com.kappaware.jdchive.yaml.YamlTable;
 
+import groovy.json.StringEscapeUtils;
+
 @SuppressWarnings("deprecation")
 public class TableEngine extends BaseEngine {
 	static Logger log = LoggerFactory.getLogger(TableEngine.class);
 
-	public TableEngine(Driver driver, YamlReport report) throws HiveException {
-		super(driver, report);
+	// Taken from org.apache.hadoop.hive.serde.serdeConstants
+	/*
+	private static final String FIELD_DELIM = "field.delim";
+	private static final String COLLECTION_DELIM = "colelction.delim";
+	private static final String LINE_DELIM = "line.delim";
+	private static final String MAPKEY_DELIM = "mapkey.delim";
+	private static final String ESCAPE_CHAR = "escape.delim";
+	private static final String SERIALIZATION_NULL_FORMAT = "serialization.null.format";
+	private static final String SERIALIZATION_FORMAT = "serialization.format";
+	*/
+	public TableEngine(Driver driver, YamlReport report, boolean dryRun) throws HiveException {
+		super(driver, report, dryRun);
 	}
 
 	int run(List<YamlTable> tables) throws TException, DescriptionException, HiveException, CommandNeedRetryException, JsonProcessingException {
@@ -80,7 +93,22 @@ public class TableEngine extends BaseEngine {
 		if (dTable.delimited != null) {
 			sb.append(" ROW FORMAT DELIMITED");
 			if (dTable.delimited.fields_terminated_by != null) {
-				sb.append(String.format(" FIELDS TERMINATED BY '%c'", dTable.delimited.fields_terminated_by));
+				sb.append(String.format(" FIELDS TERMINATED BY '%s'", dTable.delimited.fields_terminated_by));
+			}
+			if (dTable.delimited.fields_escaped_by != null) {
+				sb.append(String.format(" ESCAPED BY '%s'", dTable.delimited.fields_escaped_by));
+			}
+			if (dTable.delimited.collection_item_terminated_by != null) {
+				sb.append(String.format(" COLLECTION ITEMS TERMINATED BY '%s'", dTable.delimited.collection_item_terminated_by));
+			}
+			if (dTable.delimited.map_keys_terminated_by != null) {
+				sb.append(String.format(" MAP KEYS TERMINATED BY '%s'", dTable.delimited.map_keys_terminated_by));
+			}
+			if (dTable.delimited.lines_terminated_by != null) {
+				sb.append(String.format(" LINES TERMINATED BY '%s'", dTable.delimited.lines_terminated_by));
+			}
+			if (dTable.delimited.null_defined_as != null) {
+				sb.append(String.format(" NULL DEFINED AS '%s'", dTable.delimited.null_defined_as));
 			}
 		} else if (dTable.serde != null) {
 			sb.append(String.format(" ROW FORMAT SERDE '%s'"));
@@ -135,29 +163,31 @@ public class TableEngine extends BaseEngine {
 		int migration = 0;
 
 		// Rebuild and original in Yaml format, to ease comparaison
-		YamlTable original = new YamlTable();
-		original.name = table.getTableName();
-		original.database = table.getDbName();
-		original.external = new Boolean(table.getTableType() == TableType.EXTERNAL_TABLE);
-		original.owner = table.getOwner();
-		original.fields = new Vector<YamlField>();
+		YamlTable existing = new YamlTable();
+		existing.name = table.getTableName();
+		existing.database = table.getDbName();
+		existing.external = new Boolean(table.getTableType() == TableType.EXTERNAL_TABLE);
+		existing.owner = table.getOwner();
+		existing.fields = new Vector<YamlField>();
 		for (FieldSchema field : table.getCols()) {
 			YamlField f = new YamlField();
 			f.name = field.getName();
 			f.type = field.getType();
 			f.comment = field.getComment();
-			original.fields.add(f);
+			existing.fields.add(f);
 		}
-		original.comment = table.getParameters().get("comment");
-		original.input_format = table.getSd().getInputFormat();
-		original.output_format = table.getSd().getOutputFormat();
+		existing.comment = table.getParameters().get("comment");
+
+		existing.input_format = table.getSd().getInputFormat();
+		existing.output_format = table.getSd().getOutputFormat();
 		if (table.getSd().getSerdeInfo() != null) {
-			original.serde = table.getSd().getSerdeInfo().getName();
-			original.serde_properties = table.getSd().getSerdeInfo().getParameters();
+			log.debug(String.format("Serde name:'%s'   serializationLib:'%s'", table.getSd().getSerdeInfo().getName(), table.getSd().getSerdeInfo().getSerializationLib()));
+			existing.serde = table.getSd().getSerdeInfo().getSerializationLib();
+			existing.serde_properties = table.getSd().getSerdeInfo().getParameters();
 		}
 
-		original.location = table.getDataLocation().toString();
-		original.properties = table.getParameters();
+		existing.location = table.getDataLocation().toString();
+		existing.properties = table.getParameters();
 
 		// Normalize the target
 		target.location = this.normalizePath(target.location);
@@ -166,7 +196,7 @@ public class TableEngine extends BaseEngine {
 			target.file_format = "TEXTFILE";
 		}
 		if (target.file_format != null) {
-			StorageFormatFactory sff = new StorageFormatFactory();
+			StorageFormatFactory sff = new StorageFormatFactory(); // Refer to https://cwiki.apache.org/confluence/display/Hive/DeveloperGuide#DeveloperGuide-RegistrationofNativeSerDes
 			StorageFormatDescriptor sfDescriptor = sff.get(target.file_format);
 			if (target.input_format == null) {
 				target.input_format = sfDescriptor.getInputFormat();
@@ -178,80 +208,152 @@ public class TableEngine extends BaseEngine {
 				target.serde = sfDescriptor.getSerde();
 			}
 		}
+		if (target.delimited != null) {
+			if (target.delimited.fields_terminated_by != null) {
+				target.serde_properties.put(serdeConstants.FIELD_DELIM, StringEscapeUtils.unescapeJava(target.delimited.fields_terminated_by));
+			}
+			if (target.delimited.fields_escaped_by != null) {
+				target.serde_properties.put(serdeConstants.ESCAPE_CHAR, StringEscapeUtils.unescapeJava(target.delimited.fields_escaped_by));
+			}
+			if (target.delimited.collection_item_terminated_by != null) {
+				target.serde_properties.put(serdeConstants.COLLECTION_DELIM, StringEscapeUtils.unescapeJava(target.delimited.collection_item_terminated_by));
+			}
+			if (target.delimited.map_keys_terminated_by != null) {
+				target.serde_properties.put(serdeConstants.MAPKEY_DELIM, StringEscapeUtils.unescapeJava(target.delimited.map_keys_terminated_by));
+			}
+			if (target.delimited.lines_terminated_by != null) {
+				target.serde_properties.put(serdeConstants.LINE_DELIM, StringEscapeUtils.unescapeJava(target.delimited.lines_terminated_by));
+			}
+			if (target.delimited.null_defined_as != null) {
+				target.serde_properties.put(serdeConstants.SERIALIZATION_NULL_FORMAT, StringEscapeUtils.unescapeJava(target.delimited.null_defined_as));
+			}
+		}
+		if (target.external) {
+			// An external table will not accept any ALTER command
+			target.alterable = false;
+		}
 
-		// Create an object to store the differences.
+		// ------------------------------------------------------ Create an object to store the differences.
 		YamlTable diffTable = new YamlTable();
 		diffTable.name = table.getTableName();
 		diffTable.database = table.getDbName();
 
 		// --------------------------------------------------------------- external switch
-		if (!original.external.equals(target.external)) {
+		if (!existing.external.equals(target.external)) {
 			diffTable.external = target.external;
 			migration++;
 		}
 		// ---------------------------------------------------------------- fields list
-		int commonFieldCount = Math.min(original.fields.size(), target.fields.size());
-		// A loop to adjust comment on field, provided this is the only change (Same name, type and position)
-		int changedFields = 0;
+		int commonFieldCount = Math.min(existing.fields.size(), target.fields.size());
+		diffTable.fields = new Vector<YamlField>();
 		for (int i = 0; i < commonFieldCount; i++) {
-			if (original.fields.get(i).almostEquals(target.fields.get(i))) {
-				if (!Utils.isEqual(original.fields.get(i).comment, target.fields.get(i).comment)) {
-					if (!original.external || Utils.isDifferent(original.fields.get(i).comment, "from deserializer")) { // Seems on some external table, fields comments are constant 'from deserializer'
-						original.fields.get(i).comment = target.fields.get(i).comment;
-						changes.add(String.format("ALTER TABLE %s.%s CHANGE COLUMN %s %s %s COMMENT '%s'", table.getDbName(), table.getTableName(), original.fields.get(i).name, original.fields.get(i).name, original.fields.get(i).type, original.fields.get(i).comment));
+			YamlField existingField = existing.fields.get(i);
+			YamlField targetField = target.fields.get(i);
+			if (existingField.name.equalsIgnoreCase(targetField.name)) {
+				if (existingField.type.equalsIgnoreCase(targetField.type)) {
+					// Type is unchanged
+					if (Utils.isTextDifferent(existingField.comment, targetField.comment)) {
+						log.debug(String.format("Table %s.%s.%s: Comment diff: existing:%s  target:%s", existing.database, existing.name, existingField.name, existingField.comment, targetField.comment));
+						if (Utils.isDifferent(existingField.comment, "from deserializer")) { // 'from deserializer' is always returned as comment with some specific serde
+							if (!target.external) { // An external table will not accept any ALTER command
+								changes.add(String.format("ALTER TABLE %s.%s CHANGE COLUMN %s %s %s COMMENT '%s'", table.getDbName(), table.getTableName(), existingField.name, targetField.name, targetField.type, targetField.comment));
+							} else {
+								diffTable.fields.add(targetField);
+								migration++;
+							}
+						}
+					}
+				} else {
+					// type is changed
+					if (target.alterable) {
+						changes.add(String.format("ALTER TABLE %s.%s CHANGE COLUMN %s %s %s COMMENT '%s'", table.getDbName(), table.getTableName(), existingField.name, targetField.name, targetField.type, targetField.comment));
+					} else {
+						diffTable.fields.add(targetField);
+						migration++;
 					}
 				}
 			} else {
-				changedFields++;
+				diffTable.fields.add(targetField);
+				migration++;
 			}
 		}
-		// If there is some differences in fields set, then need migration.
-		if (changedFields > 0 || original.fields.size() != target.fields.size()) {
-			diffTable.fields = target.fields;
+		for (int i = commonFieldCount; i < target.fields.size(); i++) {
+			diffTable.fields.add(target.fields.get(i));
+			migration++;
+		}
+		for (int i = commonFieldCount; i < existing.fields.size(); i++) {
+			diffTable.fields.add(existing.fields.get(i));
 			migration++;
 		}
 		// ---------------------------------------------------------------- Handle table comment
-		if (Utils.isDifferent(original.comment, target.comment)) {
-			original.comment = target.comment;
-			if (target.comment == null) {
-				changes.add(String.format("ALTER TABLE %s.%s UNSET TBLPROPERTIES ('comment')", table.getDbName(), table.getTableName()));
+		if (Utils.isDifferent(existing.comment, target.comment)) {
+			if (!target.external) { // An external table will not accept any ALTER command
+				if (target.comment == null) {
+					changes.add(String.format("ALTER TABLE %s.%s UNSET TBLPROPERTIES ('comment')", table.getDbName(), table.getTableName()));
+				} else {
+					changes.add(String.format("ALTER TABLE %s.%s SET TBLPROPERTIES ('comment' = '%s')", table.getDbName(), table.getTableName(), target.comment));
+				}
 			} else {
-				changes.add(String.format("ALTER TABLE %s.%s SET TBLPROPERTIES ('comment' = '%s')", table.getDbName(), table.getTableName(), target.comment));
+				diffTable.comment = target.comment;
+				migration++;
+
 			}
 		}
+		// ------------------------------------------------------------------ Handle row format
+
 		// ------------------------------------------------------------------ Handle file format
-		if (Utils.isDifferent(original.input_format, target.input_format)) {
+		if (Utils.isDifferent(existing.input_format, target.input_format)) {
 			diffTable.input_format = Utils.nullMarker(target.input_format);
 			migration++;
 		}
-		if (Utils.isDifferentWithSubstitute(original.output_format, target.output_format, hiveOutputFormatSubstitute)) {
+		if (Utils.isDifferentWithSubstitute(existing.output_format, target.output_format, hiveOutputFormatSubstitute)) {
 			diffTable.output_format = Utils.nullMarker(target.output_format);
 			migration++;
 		}
 		// ------------------------------------------------------------------- Handle serde
-		if (Utils.isDifferent(original.serde, target.serde)) {
-			original.serde = target.serde;
-			changes.add(String.format("ALTER TABLE %s.%s SET SERDE '%s'", table.getDbName(), table.getTableName(), target.serde));
+		if (target.serde != null && Utils.isDifferent(existing.serde, target.serde)) {
+			if (target.alterable) {
+				changes.add(String.format("ALTER TABLE %s.%s SET SERDE '%s'", table.getDbName(), table.getTableName(), target.serde));
+			} else {
+				diffTable.serde = target.serde;
+				migration++;
+			}
 		}
 		// ------------------------------------------------------------------- Handle serde properties (Preserve existing one if not redefined)
 		for (Map.Entry<String, String> entry : target.serde_properties.entrySet()) {
-			if (Utils.isDifferent(entry.getValue(), original.serde_properties.get(entry.getKey()))) {
-				changes.add(String.format("ALTER TABLE %s.%s SET SERDEPROPERTIES ('%s' = '%s')", table.getDbName(), table.getTableName(), entry.getKey(), entry.getValue()));
+			if (Utils.isDifferent(entry.getValue(), existing.serde_properties.get(entry.getKey()))) {
+				log.debug(String.format("Serde property '%s': target: %s != existing: %s", entry.getKey(), Utils.toDebugString(entry.getValue()), Utils.toDebugString(existing.serde_properties.get(entry.getKey()))));
+				if (target.alterable) {
+					changes.add(String.format("ALTER TABLE %s.%s SET SERDEPROPERTIES ('%s' = '%s')", table.getDbName(), table.getTableName(), entry.getKey(),  StringEscapeUtils.escapeJava(entry.getValue())));
+				} else {
+					if (diffTable.serde_properties == null) {
+						diffTable.serde_properties = new HashMap<String, String>();
+					}
+					diffTable.serde_properties.put(entry.getKey(), entry.getValue());
+					migration++;
+				}
 			}
 		}
 
 		// ----------------------------------------------------------------- Handle location
 		if (target.location != null) {
-			if (!target.location.equals(original.location)) {
+			if (!target.location.equals(existing.location)) {
 				diffTable.location = Utils.nullMarker(target.location);
 				migration++;
 			}
 		}
 		// ---------------------------------------------------------------- Handle table properties (We preserve existing properties)
-		for (String keyp : target.properties.keySet()) {
-			if (!original.properties.containsKey(keyp) || !original.properties.get(keyp).equals(target.properties.get(keyp))) {
-				original.properties.put(keyp, target.properties.get(keyp));
-				changes.add(String.format("ALTER TABLE %s.%s SET TBLPROPERTIES ('%s' = '%s')", table.getDbName(), table.getTableName(), keyp, target.properties.get(keyp)));
+		for (Map.Entry<String, String> entry : target.properties.entrySet()) {
+			if (Utils.isDifferent(entry.getValue(), existing.properties.get(entry.getKey()))) {
+				if (target.alterable) {
+					changes.add(String.format("ALTER TABLE %s.%s SET TBLPROPERTIES ('%s' = '%s')", table.getDbName(), table.getTableName(), entry.getKey(),  StringEscapeUtils.escapeJava(entry.getValue())));
+				} else {
+					if (diffTable.properties == null) {
+						diffTable.properties = new HashMap<String, String>();
+					}
+					diffTable.properties.put(entry.getKey(), entry.getValue());
+					migration++;
+				}
 			}
 		}
 
@@ -265,7 +367,7 @@ public class TableEngine extends BaseEngine {
 				this.createTable(target);
 				return true;
 			} else {
-				YamlReport.TableMigration tm = new YamlReport.TableMigration(original, target, diffTable);
+				YamlReport.TableMigration tm = new YamlReport.TableMigration(existing, target, diffTable);
 				this.report.todo.tableMigrations.add(tm);
 				return changes.size() > 0;
 			}
@@ -274,9 +376,10 @@ public class TableEngine extends BaseEngine {
 		}
 	}
 
-	
 	/**
 	 * This information is grabbed from org.apache.hadoop.hive.ql.io.HiveFileFormatUtils.outputFormatSubstituteMap
+	 * 
+	 * 
 	 */
 	static Map<String, Set<String>> hiveOutputFormatSubstitute;
 	static {
@@ -284,7 +387,7 @@ public class TableEngine extends BaseEngine {
 		hiveOutputFormatSubstitute.put(IgnoreKeyTextOutputFormat.class.getName(), new HashSet<String>(Arrays.asList(HiveIgnoreKeyTextOutputFormat.class.getName())));
 		hiveOutputFormatSubstitute.put(SequenceFileOutputFormat.class.getName(), new HashSet<String>(Arrays.asList(HiveSequenceFileOutputFormat.class.getName())));
 	}
-	
+
 	private void dropTable(YamlTable dTable) throws CommandNeedRetryException, DescriptionException {
 		this.performCmd(String.format("DROP TABLE %s.%s", dTable.database, dTable.name));
 	}

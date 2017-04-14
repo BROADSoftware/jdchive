@@ -28,8 +28,6 @@ import java.util.Set;
 
 import org.apache.hadoop.conf.Configuration;
 
-
-
 public class Utils {
 	static public final String DEFAULT_NS = "default";
 
@@ -45,7 +43,7 @@ public class Utils {
 			}
 		}
 	}
-	
+
 	private static HashSet<String> trueValues = new HashSet<String>(Arrays.asList("yes", "true", "1", "si", "oui", "ya"));
 	private static HashSet<String> falseValues = new HashSet<String>(Arrays.asList("no", "false", "0", "no", "non", "nein"));
 
@@ -72,6 +70,17 @@ public class Utils {
 		return (s != null && s.trim().length() > 0);
 	}
 
+	public static boolean isTextEqual(String s1, String s2) {
+		if (isNullOrEmpty(s1)) {
+			return isNullOrEmpty(s2);
+		} else {
+			return s1.equals(s2);
+		}
+	}
+
+	public static boolean isTextDifferent(String s1, String s2) {
+		return !isTextEqual(s1, s2);
+	}
 
 	static public void dumpConfiguration(Configuration conf, String dumpFile) throws IOException {
 		Writer out = null;
@@ -84,7 +93,7 @@ public class Utils {
 			}
 			*/
 			Iterator<Map.Entry<String, String>> it = conf.iterator();
-			while(it.hasNext()) {
+			while (it.hasNext()) {
 				Map.Entry<String, String> entry = it.next();
 				out.write(String.format("%s -> %s\n", entry.getKey(), entry.getValue()));
 			}
@@ -97,7 +106,7 @@ public class Utils {
 	}
 
 	public static boolean isEqual(Object o1, Object o2) {
-		if(o1 == null) {
+		if (o1 == null) {
 			return o2 == null;
 		} else {
 			return o1.equals(o2);
@@ -113,9 +122,9 @@ public class Utils {
 	public static boolean isDifferent(Object o1, Object o2) {
 		return !isEqual(o1, o2);
 	}
-	
+
 	public static <T> boolean isEqualWithSubstitute(T o1, T o2, Map<T, Set<T>> substitutes) {
-		if( o1 == null && o2 == null) {
+		if (o1 == null && o2 == null) {
 			return true;
 		} else if (o1 == null || o2 == null) {
 			return false;
@@ -123,31 +132,42 @@ public class Utils {
 			return true;
 		} else {
 			Set<T> s1 = substitutes.get(o1);
-			if(s1 != null && s1.contains(o2)) {
+			if (s1 != null && s1.contains(o2)) {
 				return true;
 			}
 			Set<T> s2 = substitutes.get(o2);
-			if(s2 != null && s2.contains(o1)) {
+			if (s2 != null && s2.contains(o1)) {
 				return true;
 			}
 			return false;
 		}
 	}
-	
 
 	public static <T> boolean isDifferentWithSubstitute(T o1, T o2, Map<T, Set<T>> substitutes) {
 		return !isEqualWithSubstitute(o1, o2, substitutes);
 	}
-	
-	
+
 	public static String nullMarker(String s) {
-		if(s == null) {
+		if (s == null) {
 			return "[NULL]";
 		} else {
 			return s;
 		}
 	}
-	
-	
+
+	static public String toDebugString(Object o) {
+		if (o != null) {
+			StringBuffer sb = new StringBuffer();
+			sb.append("Type:'" + o.getClass().getName() + "'");
+			if(o instanceof String) {
+				sb.append("Content: " + Arrays.toString(((String)o).getBytes()) );
+			} else {
+				sb.append(" toString():'" + o.toString() + "'");
+			}
+			return sb.toString();
+		} else {
+			return "{NULL}";
+		}
+	}
 
 }

@@ -64,6 +64,11 @@ public class JdcConfigurationImpl implements JdcConfiguration {
 		return parameters.getReportFile();
 	}
 
+	@Override
+	public boolean isDryRun() {
+		return parameters.isDryRun();
+	}
+
 
 		
 }

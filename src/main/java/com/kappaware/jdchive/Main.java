@@ -104,14 +104,14 @@ public class Main {
 
 		YamlReport report = new YamlReport();
 
-		DatabaseEngine databaseEngine = new DatabaseEngine(driver, report);
+		DatabaseEngine databaseEngine = new DatabaseEngine(driver, report, jdcConfiguration.isDryRun());
 
 		if (description.databases != null) {
 			databaseEngine.addOperation(description.databases);
 		}
 
 		if (description.tables != null) {
-			(new TableEngine(driver, report)).run(description.tables);
+			(new TableEngine(driver, report, jdcConfiguration.isDryRun())).run(description.tables);
 		}
 
 		if (description.databases != null) {

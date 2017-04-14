@@ -24,17 +24,19 @@ public class YamlTable {
 		public String serde;
 		public Map<String, String> serde_properties;
 		public String storage_handler;
+		public Boolean alterable;
 
 		public String owner;		
 		public YamlState state;
 
+		// Note: Two possible notation:  '\t' or '\u0009'
 		static public class Delimited {
-			public Character fields_terminated_by;
-			public Character fields_escaped_by;
-			public Character collection_item_terminated_by;
-			public Character map_keys_terminated_by;
-			public Character line_terminated_by;
-			public Character null_defined_as;
+			public String fields_terminated_by;
+			public String fields_escaped_by;
+			public String collection_item_terminated_by;
+			public String map_keys_terminated_by;
+			public String lines_terminated_by;
+			public String null_defined_as;
 		}
 		
 		public void polish(YamlState defaultState) throws DescriptionException {
@@ -73,6 +75,9 @@ public class YamlTable {
 			}
 			if (this.state == null) {
 				this.state = defaultState;
+			}
+			if(this.alterable == null) {
+				this.alterable = false;
 			}
 		}
 		

@@ -36,6 +36,8 @@ public interface JdcConfiguration {
 
 	String getReportFile();
 
+	boolean isDryRun();
+
 
 
 }

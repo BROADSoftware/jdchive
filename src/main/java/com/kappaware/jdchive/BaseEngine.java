@@ -15,7 +15,6 @@ import org.slf4j.LoggerFactory;
 
 import com.kappaware.jdchive.yaml.YamlReport;
 
-
 public class BaseEngine {
 	static Logger log = LoggerFactory.getLogger(BaseEngine.class);
 
@@ -23,12 +22,14 @@ public class BaseEngine {
 	protected YamlReport report;
 	protected Driver driver;
 	private URI defaultUri;
+	private boolean dryRun;
 
-	public BaseEngine(Driver driver, YamlReport report) throws HiveException {
+	public BaseEngine(Driver driver, YamlReport report, boolean dryRun) throws HiveException {
 		this.hive = Hive.get();
 		this.driver = driver;
 		this.report = report;
 		this.defaultUri = FileSystem.getDefaultUri(this.hive.getConf());
+		this.dryRun = dryRun;
 	}
 
 	protected String normalizePath(String path) {
@@ -44,17 +45,21 @@ public class BaseEngine {
 	}
 
 	protected void performCmd(String cmd) throws CommandNeedRetryException, DescriptionException {
-		log.info(String.format("Will perform '%s'", cmd));
-		CommandProcessorResponse ret = this.driver.run(cmd, false);
-		//log.info(String.format("Response: %s", ret.toString()));
-		if(ret.getResponseCode() != 0) {
-			throw new DescriptionException(String.format("%s", ret.toString()));
+		if (this.dryRun) {
+			log.info(String.format("DRY RUN: Would perform '%s'", cmd));
+		} else {
+			log.info(String.format("Will perform '%s'", cmd));
+			CommandProcessorResponse ret = this.driver.run(cmd, false);
+			//log.info(String.format("Response: %s", ret.toString()));
+			if (ret.getResponseCode() != 0) {
+				throw new DescriptionException(String.format("%s", ret.toString()));
+			}
 		}
 		this.report.done.commands.add(cmd);
 	}
 
 	protected void performCmds(List<String> cmds) throws CommandNeedRetryException, DescriptionException {
-		for(String cmd : cmds) {
+		for (String cmd : cmds) {
 			this.performCmd(cmd);
 		}
 	}

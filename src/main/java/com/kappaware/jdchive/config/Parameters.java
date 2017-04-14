@@ -44,6 +44,7 @@ public class Parameters {
 	private String dumpConfigFile;
 	private String reportFile;
 	private List<String> configFiles;
+	private boolean dryRun;
 	
 	static OptionParser parser = new OptionParser();
 	static {
@@ -58,9 +59,9 @@ public class Parameters {
 	static OptionSpec<String> KEYTAB_OPT = parser.accepts("keytab", "Keytyab file path").withRequiredArg().describedAs("keytab_file").ofType(String.class);
 
 	static OptionSpec<String> DUMP_CONFIG_FILE_OPT = parser.accepts("dumpConfigFile", "Debuging purpose: All HBaseConfiguration will be dumped in this file").withRequiredArg().describedAs("dump_file").ofType(String.class);
-	static OptionSpec<String> REPORT_FILE_OPT = parser.accepts("reportFile", "Allow tracking of performed operation and migration still to perform").withRequiredArg().describedAs("report_file").ofType(String.class);
+	static OptionSpec<String> REPORT_FILE_OPT = parser.accepts("reportFile", "Allow tracking of performed operation and of remaining migration to perform").withRequiredArg().describedAs("report_file").ofType(String.class);
 
-
+	static OptionSpec<?> DRY_RUN_OPT = parser.accepts("dryRun", "Perform no action");
 	
 	@SuppressWarnings("serial")
 	private static class MyOptionException extends Exception {
@@ -86,6 +87,7 @@ public class Parameters {
 			this.dumpConfigFile = result.valueOf(DUMP_CONFIG_FILE_OPT);
 			this.reportFile = result.valueOf(REPORT_FILE_OPT);
 			this.configFiles = result.valuesOf(CONFIG_FILES_OPT);
+			this.dryRun = result.has(DRY_RUN_OPT);
 		} catch (OptionException | MyOptionException t) {
 			throw new ConfigurationException(usage(t.getMessage()));
 		}
@@ -137,6 +139,10 @@ public class Parameters {
 
 	public String getReportFile() {
 		return reportFile;
+	}
+
+	public boolean isDryRun() {
+		return dryRun;
 	}
 
 	
