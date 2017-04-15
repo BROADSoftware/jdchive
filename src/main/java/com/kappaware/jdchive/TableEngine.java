@@ -75,63 +75,77 @@ public class TableEngine extends BaseEngine {
 		return nbrModif;
 	}
 
-	private void createTable(YamlTable dTable) throws CommandNeedRetryException, DescriptionException {
-		StringBuffer sb = new StringBuffer();
-		sb.append(String.format("CREATE %s TABLE %s.%s (", (dTable.external.booleanValue() ? "EXTERNAL" : ""), dTable.database, dTable.name));
+	private static void wrapFields(List<YamlField> fields, StringBuffer sb) {
+		sb.append("(");
 		String sep = "";
-		for (YamlField field : dTable.fields) {
-			sb.append(String.format("%s %s %s", sep, field.name, field.type));
-			if (field.comment != null) {
-				sb.append(" COMMENT '" + field.comment + "'");
-			}
+		for (YamlField field : fields) {
+			sb.append(String.format("%s %s %s%s", sep, field.name, field.type, wrapComment(field.comment)));
 			sep = ",";
 		}
 		sb.append(" )");
-		if (dTable.comment != null) {
-			sb.append(" COMMENT '" + dTable.comment + "'");
+	}
+
+	private static String wrapComment(String comment) {
+		if (comment == null) {
+			return "";
+		} else {
+			return String.format(" COMMENT '%s'", comment);
 		}
-		if (dTable.delimited != null) {
+	}
+
+	private void createTable(YamlTable target) throws CommandNeedRetryException, DescriptionException {
+		StringBuffer sb = new StringBuffer();
+		sb.append(String.format("CREATE %s TABLE %s.%s ", (target.external.booleanValue() ? "EXTERNAL" : ""), target.database, target.name));
+		wrapFields(target.fields, sb);
+		if (target.comment != null) {
+			sb.append(" COMMENT '" + target.comment + "'");
+		}
+		if (target.partitions.size() > 0) {
+			sb.append(" PARTITIONED BY ");
+			wrapFields(target.partitions, sb);
+		}
+		if (target.delimited != null) {
 			sb.append(" ROW FORMAT DELIMITED");
-			if (dTable.delimited.fields_terminated_by != null) {
-				sb.append(String.format(" FIELDS TERMINATED BY '%s'", dTable.delimited.fields_terminated_by));
+			if (target.delimited.fields_terminated_by != null) {
+				sb.append(String.format(" FIELDS TERMINATED BY '%s'", target.delimited.fields_terminated_by));
 			}
-			if (dTable.delimited.fields_escaped_by != null) {
-				sb.append(String.format(" ESCAPED BY '%s'", dTable.delimited.fields_escaped_by));
+			if (target.delimited.fields_escaped_by != null) {
+				sb.append(String.format(" ESCAPED BY '%s'", target.delimited.fields_escaped_by));
 			}
-			if (dTable.delimited.collection_item_terminated_by != null) {
-				sb.append(String.format(" COLLECTION ITEMS TERMINATED BY '%s'", dTable.delimited.collection_item_terminated_by));
+			if (target.delimited.collection_item_terminated_by != null) {
+				sb.append(String.format(" COLLECTION ITEMS TERMINATED BY '%s'", target.delimited.collection_item_terminated_by));
 			}
-			if (dTable.delimited.map_keys_terminated_by != null) {
-				sb.append(String.format(" MAP KEYS TERMINATED BY '%s'", dTable.delimited.map_keys_terminated_by));
+			if (target.delimited.map_keys_terminated_by != null) {
+				sb.append(String.format(" MAP KEYS TERMINATED BY '%s'", target.delimited.map_keys_terminated_by));
 			}
-			if (dTable.delimited.lines_terminated_by != null) {
-				sb.append(String.format(" LINES TERMINATED BY '%s'", dTable.delimited.lines_terminated_by));
+			if (target.delimited.lines_terminated_by != null) {
+				sb.append(String.format(" LINES TERMINATED BY '%s'", target.delimited.lines_terminated_by));
 			}
-			if (dTable.delimited.null_defined_as != null) {
-				sb.append(String.format(" NULL DEFINED AS '%s'", dTable.delimited.null_defined_as));
+			if (target.delimited.null_defined_as != null) {
+				sb.append(String.format(" NULL DEFINED AS '%s'", target.delimited.null_defined_as));
 			}
-		} else if (dTable.serde != null) {
+		} else if (target.serde != null) {
 			sb.append(String.format(" ROW FORMAT SERDE '%s'"));
-			if (dTable.serde_properties.size() > 0) {
-				sb.append(String.format(" WITH SERDEPROPERTIES (%s)", this.buildPropertiesAsString(dTable.serde_properties)));
+			if (target.serde_properties.size() > 0) {
+				sb.append(String.format(" WITH SERDEPROPERTIES (%s)", this.buildPropertiesAsString(target.serde_properties)));
 			}
 		}
-		if (dTable.file_format != null) {
-			sb.append(String.format(" STORED AS %s", dTable.file_format));
-		} else if (dTable.input_format != null) {
-			sb.append(String.format(" INPUTFORMAT '%s' OUTPUTFORMAT '%s'", dTable.input_format, dTable.output_format));
+		if (target.stored_as != null) {
+			sb.append(String.format(" STORED AS %s", target.stored_as));
+		} else if (target.input_format != null) {
+			sb.append(String.format(" INPUTFORMAT '%s' OUTPUTFORMAT '%s'", target.input_format, target.output_format));
 		}
-		if (dTable.storage_handler != null) {
-			sb.append(String.format(" STORED BY '%s'", dTable.storage_handler));
-			if (dTable.serde_properties.size() > 0) {
-				sb.append(String.format(" WITH SERDEPROPERTIES (%s)", this.buildPropertiesAsString(dTable.serde_properties)));
+		if (target.storage_handler != null) {
+			sb.append(String.format(" STORED BY '%s'", target.storage_handler));
+			if (target.serde_properties.size() > 0) {
+				sb.append(String.format(" WITH SERDEPROPERTIES (%s)", this.buildPropertiesAsString(target.serde_properties)));
 			}
 		}
-		if (dTable.location != null) {
-			sb.append(" LOCATION '" + this.normalizePath(dTable.location) + "'");
+		if (target.location != null) {
+			sb.append(" LOCATION '" + this.normalizePath(target.location) + "'");
 		}
-		if (dTable.properties.size() > 0) {
-			sb.append(String.format(" TBLPROPERTIES (%s)", this.buildPropertiesAsString(dTable.properties)));
+		if (target.properties.size() > 0) {
+			sb.append(String.format(" TBLPROPERTIES (%s)", this.buildPropertiesAsString(target.properties)));
 		}
 		this.performCmd(sb.toString());
 	}
@@ -176,6 +190,14 @@ public class TableEngine extends BaseEngine {
 			f.comment = field.getComment();
 			existing.fields.add(f);
 		}
+		existing.partitions = new Vector<YamlField>();
+		for (FieldSchema field : table.getPartCols()) {
+			YamlField f = new YamlField();
+			f.name = field.getName();
+			f.type = field.getType();
+			f.comment = field.getComment();
+			existing.partitions.add(f);
+		}
 		existing.comment = table.getParameters().get("comment");
 
 		existing.input_format = table.getSd().getInputFormat();
@@ -192,12 +214,12 @@ public class TableEngine extends BaseEngine {
 		// Normalize the target
 		target.location = this.normalizePath(target.location);
 
-		if (target.input_format == null && target.output_format == null && target.storage_handler == null && target.file_format == null) {
-			target.file_format = "TEXTFILE";
+		if (target.input_format == null && target.output_format == null && target.storage_handler == null && target.stored_as == null) {
+			target.stored_as = "TEXTFILE";
 		}
-		if (target.file_format != null) {
+		if (target.stored_as != null) {
 			StorageFormatFactory sff = new StorageFormatFactory(); // Refer to https://cwiki.apache.org/confluence/display/Hive/DeveloperGuide#DeveloperGuide-RegistrationofNativeSerDes
-			StorageFormatDescriptor sfDescriptor = sff.get(target.file_format);
+			StorageFormatDescriptor sfDescriptor = sff.get(target.stored_as);
 			if (target.input_format == null) {
 				target.input_format = sfDescriptor.getInputFormat();
 			}
@@ -266,7 +288,7 @@ public class TableEngine extends BaseEngine {
 				} else {
 					// type is changed
 					if (target.alterable) {
-						changes.add(String.format("ALTER TABLE %s.%s CHANGE COLUMN %s %s %s %s", table.getDbName(), table.getTableName(), existingField.name, targetField.name, targetField.type, this.commentClause(targetField.comment)));
+						changes.add(String.format("ALTER TABLE %s.%s CHANGE COLUMN %s %s %s%s", table.getDbName(), table.getTableName(), existingField.name, targetField.name, targetField.type, wrapComment(targetField.comment)));
 					} else {
 						diffTable.fields.add(targetField);
 						migration++;
@@ -280,7 +302,7 @@ public class TableEngine extends BaseEngine {
 		for (int i = commonFieldCount; i < target.fields.size(); i++) {
 			YamlField targetField = target.fields.get(i);
 			if (target.alterable) {
-				changes.add(String.format("ALTER TABLE %s.%s ADD COLUMNS (%s %s %s)", table.getDbName(), table.getTableName(), targetField.name, targetField.type, this.commentClause(targetField.comment)));
+				changes.add(String.format("ALTER TABLE %s.%s ADD COLUMNS (%s %s%s)", table.getDbName(), table.getTableName(), targetField.name, targetField.type, wrapComment(targetField.comment)));
 			} else {
 				diffTable.fields.add(targetField);
 				migration++;
@@ -288,6 +310,41 @@ public class TableEngine extends BaseEngine {
 		}
 		for (int i = commonFieldCount; i < existing.fields.size(); i++) {
 			diffTable.fields.add(existing.fields.get(i));
+			migration++;
+		}
+		// ---------------------------------------------------------------- Handle partition (Only type change are possible using Alter command)
+		int commonPartCount = Math.min(existing.partitions.size(), target.partitions.size());
+		diffTable.partitions = new Vector<YamlField>();
+		for (int i = 0; i < commonPartCount; i++) {
+			YamlField existingPartField = existing.partitions.get(i);
+			YamlField targetPartField = target.partitions.get(i);
+			if (existingPartField.name.equalsIgnoreCase(targetPartField.name)) {
+				if (existingPartField.type.equalsIgnoreCase(targetPartField.type)) {
+					// Type is unchanged
+					if (Utils.isTextDifferent(existingPartField.comment, targetPartField.comment)) {
+						diffTable.partitions.add(targetPartField);
+						migration++;
+					}
+				} else {
+					// type is changed
+					if (target.alterable) {
+						changes.add(String.format("ALTER TABLE %s.%s PARTITION COLUMN (%s %s)", table.getDbName(), table.getTableName(), existingPartField.name, targetPartField.type));
+					} else {
+						diffTable.partitions.add(targetPartField);
+						migration++;
+					}
+				}
+			} else {
+				diffTable.partitions.add(targetPartField);
+				migration++;
+			}
+		}
+		for (int i = commonPartCount; i < target.partitions.size(); i++) {
+			diffTable.partitions.add(target.partitions.get(i));
+			migration++;
+		}
+		for (int i = commonPartCount; i < existing.partitions.size(); i++) {
+			diffTable.partitions.add(existing.partitions.get(i));
 			migration++;
 		}
 		// ---------------------------------------------------------------- Handle table comment
@@ -376,14 +433,6 @@ public class TableEngine extends BaseEngine {
 			}
 		} else {
 			return changes.size() > 0;
-		}
-	}
-
-	private String commentClause(String comment) {
-		if (comment == null) {
-			return "";
-		} else {
-			return String.format(" COMMENT '%s'", comment);
 		}
 	}
 

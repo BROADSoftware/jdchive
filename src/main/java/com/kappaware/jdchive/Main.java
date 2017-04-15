@@ -54,7 +54,7 @@ public class Main {
 	}
 
 	static public int main2(String[] argv) throws ConfigurationException, DescriptionException, IOException, InterruptedException, TException, HiveException, CommandNeedRetryException {
-		log.info("jdchive start");
+		log.info(String.format("jdchive start.  (Hive version:%s   short:%s)", Utils.getHiveVersion(), Utils.getHiveShortVersion()));
 
 		JdcConfiguration jdcConfiguration = new JdcConfigurationImpl(new Parameters(argv));
 		File file = new File(jdcConfiguration.getInputFile());

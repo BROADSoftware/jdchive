@@ -16,13 +16,15 @@ public class YamlTable {
 		public String comment;
 		public String location;
 		public Map<String, String> properties;
-		public String file_format;
+		public String stored_as;
 		public String input_format;
 		public String output_format;
 		public Delimited delimited;
 		public String serde;
 		public Map<String, String> serde_properties;
 		public String storage_handler;
+		
+		public List<YamlField> partitions;
 
 		public Boolean alterable;
 		public Boolean droppable;
@@ -65,8 +67,8 @@ public class YamlTable {
 			if ((this.input_format == null) != (this.output_format == null)) {
 				throw new DescriptionException(String.format("Invalid description: Table '%s.%s': Both 'input_format' and 'output_format' must be defined together!", this.database, this.name));
 			}
-			if(this.input_format != null && this.file_format != null) {
-				throw new DescriptionException(String.format("Invalid description: Table '%s.%s': Both 'file_format' and 'input/output_format' can't be defined together!", this.database, this.name));
+			if(this.input_format != null && this.stored_as != null) {
+				throw new DescriptionException(String.format("Invalid description: Table '%s.%s': Both 'stored_as' and 'input/output_format' can't be defined together!", this.database, this.name));
 			}
 			if(this.delimited != null && this.serde != null) {
 				throw new DescriptionException(String.format("Invalid description: Table '%s.%s': Both 'delimited' and 'serde' can't be defined together!", this.database, this.name));
@@ -79,6 +81,9 @@ public class YamlTable {
 			}
 			if(this.alterable == null) {
 				this.alterable = false;
+			}
+			if(this.partitions == null) {
+				this.partitions = new Vector<YamlField>();
 			}
 		}
 		

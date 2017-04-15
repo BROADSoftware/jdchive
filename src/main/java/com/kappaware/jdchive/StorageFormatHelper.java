@@ -28,8 +28,8 @@ public class StorageFormatHelper {
 
 	StorageFormatHelper(HiveConf conf, YamlTable tbl) throws DescriptionException {
 		this.conf = conf;
-		if (tbl.file_format != null) {
-			this.processStorageFormat(tbl.file_format.toString());
+		if (tbl.stored_as != null) {
+			this.processStorageFormat(tbl.stored_as.toString());
 		} 
 		if(tbl.input_format != null) {
 			this.inputFormat = ensureClassExists(tbl.input_format);

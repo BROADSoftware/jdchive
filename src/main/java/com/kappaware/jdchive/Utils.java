@@ -19,6 +19,7 @@ import java.io.BufferedWriter;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.io.Writer;
+import java.lang.annotation.Annotation;
 import java.util.Arrays;
 import java.util.EnumSet;
 import java.util.HashSet;
@@ -26,7 +27,9 @@ import java.util.Iterator;
 import java.util.Map;
 import java.util.Set;
 
+
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hive.common.HiveVersionAnnotation;
 
 public class Utils {
 	static public final String DEFAULT_NS = "default";
@@ -159,8 +162,8 @@ public class Utils {
 		if (o != null) {
 			StringBuffer sb = new StringBuffer();
 			sb.append("Type:'" + o.getClass().getName() + "'");
-			if(o instanceof String) {
-				sb.append("Content: " + Arrays.toString(((String)o).getBytes()) );
+			if (o instanceof String) {
+				sb.append("Content: " + Arrays.toString(((String) o).getBytes()));
 			} else {
 				sb.append(" toString():'" + o.toString() + "'");
 			}
@@ -170,4 +173,23 @@ public class Utils {
 		}
 	}
 
+	public static String getHiveVersion() {
+		Package pkg = HiveVersionAnnotation.class.getPackage();
+		Annotation[] myPackageAnnotations = pkg.getAnnotations();
+		HiveVersionAnnotation hva = (HiveVersionAnnotation)myPackageAnnotations[0];
+		return hva.version();
+	}
+	
+	public static String getHiveShortVersion() {
+		Package pkg = HiveVersionAnnotation.class.getPackage();
+		Annotation[] myPackageAnnotations = pkg.getAnnotations();
+		HiveVersionAnnotation hva = (HiveVersionAnnotation)myPackageAnnotations[0];
+		return hva.shortVersion();
+	}
+
+	/*
+	public static void main(String[] argc) {
+		System.out.println(getHiveVersion());
+	}
+	*/
 }
