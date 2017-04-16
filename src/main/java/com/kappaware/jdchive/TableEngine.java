@@ -31,7 +31,6 @@ import com.kappaware.jdchive.yaml.YamlReport;
 import com.kappaware.jdchive.yaml.YamlState;
 import com.kappaware.jdchive.yaml.YamlTable;
 
-import groovy.json.StringEscapeUtils;
 
 @SuppressWarnings("deprecation")
 public class TableEngine extends BaseEngine {
@@ -125,7 +124,7 @@ public class TableEngine extends BaseEngine {
 				sb.append(String.format(" NULL DEFINED AS '%s'", target.delimited.null_defined_as));
 			}
 		} else if (target.serde != null) {
-			sb.append(String.format(" ROW FORMAT SERDE '%s'"));
+			sb.append(String.format(" ROW FORMAT SERDE '%s'", target.serde));
 			if (target.serde_properties.size() > 0) {
 				sb.append(String.format(" WITH SERDEPROPERTIES (%s)", this.buildPropertiesAsString(target.serde_properties)));
 			}
@@ -232,22 +231,22 @@ public class TableEngine extends BaseEngine {
 		}
 		if (target.delimited != null) {
 			if (target.delimited.fields_terminated_by != null) {
-				target.serde_properties.put(serdeConstants.FIELD_DELIM, StringEscapeUtils.unescapeJava(target.delimited.fields_terminated_by));
+				target.serde_properties.put(serdeConstants.FIELD_DELIM, target.delimited.fields_terminated_by);
 			}
 			if (target.delimited.fields_escaped_by != null) {
-				target.serde_properties.put(serdeConstants.ESCAPE_CHAR, StringEscapeUtils.unescapeJava(target.delimited.fields_escaped_by));
+				target.serde_properties.put(serdeConstants.ESCAPE_CHAR, target.delimited.fields_escaped_by);
 			}
 			if (target.delimited.collection_item_terminated_by != null) {
-				target.serde_properties.put(serdeConstants.COLLECTION_DELIM, StringEscapeUtils.unescapeJava(target.delimited.collection_item_terminated_by));
+				target.serde_properties.put(serdeConstants.COLLECTION_DELIM, target.delimited.collection_item_terminated_by);
 			}
 			if (target.delimited.map_keys_terminated_by != null) {
-				target.serde_properties.put(serdeConstants.MAPKEY_DELIM, StringEscapeUtils.unescapeJava(target.delimited.map_keys_terminated_by));
+				target.serde_properties.put(serdeConstants.MAPKEY_DELIM, target.delimited.map_keys_terminated_by);
 			}
 			if (target.delimited.lines_terminated_by != null) {
-				target.serde_properties.put(serdeConstants.LINE_DELIM, StringEscapeUtils.unescapeJava(target.delimited.lines_terminated_by));
+				target.serde_properties.put(serdeConstants.LINE_DELIM, target.delimited.lines_terminated_by);
 			}
 			if (target.delimited.null_defined_as != null) {
-				target.serde_properties.put(serdeConstants.SERIALIZATION_NULL_FORMAT, StringEscapeUtils.unescapeJava(target.delimited.null_defined_as));
+				target.serde_properties.put(serdeConstants.SERIALIZATION_NULL_FORMAT, target.delimited.null_defined_as);
 			}
 		}
 		if (target.external) {
@@ -348,7 +347,7 @@ public class TableEngine extends BaseEngine {
 			migration++;
 		}
 		// ---------------------------------------------------------------- Handle table comment
-		if (Utils.isDifferent(existing.comment, target.comment)) {
+		if (Utils.isEscapedDifferent(existing.comment, target.comment)) {
 			if (!target.external) { // An external table will not accept any ALTER command
 				if (target.comment == null) {
 					changes.add(String.format("ALTER TABLE %s.%s UNSET TBLPROPERTIES ('comment')", table.getDbName(), table.getTableName()));
@@ -371,7 +370,7 @@ public class TableEngine extends BaseEngine {
 			migration++;
 		}
 		// ------------------------------------------------------------------- Handle serde
-		if (target.serde != null && Utils.isDifferent(existing.serde, target.serde)) {
+		if (target.serde != null && Utils.isTextDifferent(existing.serde, target.serde)) {
 			if (target.alterable) {
 				changes.add(String.format("ALTER TABLE %s.%s SET SERDE '%s'", table.getDbName(), table.getTableName(), target.serde));
 			} else {
@@ -381,10 +380,10 @@ public class TableEngine extends BaseEngine {
 		}
 		// ------------------------------------------------------------------- Handle serde properties (Preserve existing one if not redefined)
 		for (Map.Entry<String, String> entry : target.serde_properties.entrySet()) {
-			if (Utils.isDifferent(entry.getValue(), existing.serde_properties.get(entry.getKey()))) {
+			if (Utils.isEscapedDifferent(entry.getValue(), existing.serde_properties.get(entry.getKey()))) {
 				log.debug(String.format("Serde property '%s': target: %s != existing: %s", entry.getKey(), Utils.toDebugString(entry.getValue()), Utils.toDebugString(existing.serde_properties.get(entry.getKey()))));
 				if (target.alterable) {
-					changes.add(String.format("ALTER TABLE %s.%s SET SERDEPROPERTIES ('%s' = '%s')", table.getDbName(), table.getTableName(), entry.getKey(), StringEscapeUtils.escapeJava(entry.getValue())));
+					changes.add(String.format("ALTER TABLE %s.%s SET SERDEPROPERTIES ('%s' = '%s')", table.getDbName(), table.getTableName(), entry.getKey(), entry.getValue()));
 				} else {
 					if (diffTable.serde_properties == null) {
 						diffTable.serde_properties = new HashMap<String, String>();
@@ -404,9 +403,9 @@ public class TableEngine extends BaseEngine {
 		}
 		// ---------------------------------------------------------------- Handle table properties (We preserve existing properties)
 		for (Map.Entry<String, String> entry : target.properties.entrySet()) {
-			if (Utils.isDifferent(entry.getValue(), existing.properties.get(entry.getKey()))) {
+			if (Utils.isEscapedDifferent(entry.getValue(), existing.properties.get(entry.getKey()))) {
 				if (target.alterable) {
-					changes.add(String.format("ALTER TABLE %s.%s SET TBLPROPERTIES ('%s' = '%s')", table.getDbName(), table.getTableName(), entry.getKey(), StringEscapeUtils.escapeJava(entry.getValue())));
+					changes.add(String.format("ALTER TABLE %s.%s SET TBLPROPERTIES ('%s' = '%s')", table.getDbName(), table.getTableName(), entry.getKey(), entry.getValue()));
 				} else {
 					if (diffTable.properties == null) {
 						diffTable.properties = new HashMap<String, String>();

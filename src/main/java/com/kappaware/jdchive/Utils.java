@@ -27,7 +27,7 @@ import java.util.Iterator;
 import java.util.Map;
 import java.util.Set;
 
-
+import org.apache.commons.lang.StringEscapeUtils;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hive.common.HiveVersionAnnotation;
 
@@ -85,6 +85,27 @@ public class Utils {
 		return !isTextEqual(s1, s2);
 	}
 
+
+	public static boolean isEscapedEqual(String s1, String s2) {
+		if (s1 == null) {
+			return s2 == null;
+		} else {
+			if (s1.equals(s2)) {
+				return true;
+			} else {
+				// Must consider 'xx\tyy" same as "xx\u0009yy"
+				s1 = StringEscapeUtils.unescapeJava(s1);
+				s2 = StringEscapeUtils.unescapeJava(s2);
+				return s1.equals(s2);
+			}
+		}
+	}
+
+	public static boolean isEscapedDifferent(String s1, String s2) {
+		return !isEscapedEqual(s1, s2);
+	}
+
+	
 	static public void dumpConfiguration(Configuration conf, String dumpFile) throws IOException {
 		Writer out = null;
 		try {
@@ -176,14 +197,14 @@ public class Utils {
 	public static String getHiveVersion() {
 		Package pkg = HiveVersionAnnotation.class.getPackage();
 		Annotation[] myPackageAnnotations = pkg.getAnnotations();
-		HiveVersionAnnotation hva = (HiveVersionAnnotation)myPackageAnnotations[0];
+		HiveVersionAnnotation hva = (HiveVersionAnnotation) myPackageAnnotations[0];
 		return hva.version();
 	}
-	
+
 	public static String getHiveShortVersion() {
 		Package pkg = HiveVersionAnnotation.class.getPackage();
 		Annotation[] myPackageAnnotations = pkg.getAnnotations();
-		HiveVersionAnnotation hva = (HiveVersionAnnotation)myPackageAnnotations[0];
+		HiveVersionAnnotation hva = (HiveVersionAnnotation) myPackageAnnotations[0];
 		return hva.shortVersion();
 	}
 
