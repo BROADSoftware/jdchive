@@ -33,7 +33,6 @@ import com.kappaware.jdchive.yaml.YamlState;
 import com.kappaware.jdchive.yaml.YamlTable;
 import com.kappaware.jdchive.yaml.YamlTable.Direction;
 
-
 @SuppressWarnings("deprecation")
 public class TableEngine extends BaseEngine {
 	static Logger log = LoggerFactory.getLogger(TableEngine.class);
@@ -98,15 +97,15 @@ public class TableEngine extends BaseEngine {
 		StringBuffer sb = new StringBuffer();
 		sb.append(" CLUSTERED BY(");
 		String sep = "";
-		for(String col : clustered_by.columns) {
+		for (String col : clustered_by.columns) {
 			sb.append(String.format("%s%s", sep, col));
 			sep = ",";
 		}
 		sb.append(")");
-		if(clustered_by.sorted_by.size() > 0) {
+		if (clustered_by.sorted_by.size() > 0) {
 			sb.append(" SORTED BY (");
 			sep = "";
-			for(YamlTable.SortItem si : clustered_by.sorted_by) {
+			for (YamlTable.SortItem si : clustered_by.sorted_by) {
 				sb.append(String.format("%s%s %s", sep, si.column, si.direction));
 				sep = ",";
 			}
@@ -115,7 +114,40 @@ public class TableEngine extends BaseEngine {
 		sb.append(String.format(" INTO %d BUCKETS", clustered_by.nbr_buckets));
 		return sb.toString();
 	}
-	
+
+	private static String buildSkewedBy(YamlTable table) {
+		StringBuffer sb = new StringBuffer();
+		sb.append(" SKEWED BY(");
+		String sep = "";
+		for (String col : table.skewed_by.columns) {
+			sb.append(String.format("%s%s", sep, col));
+			sep = ",";
+		}
+		sb.append(") ON(");
+		sep = "";
+		for (List<String> values : table.skewed_by.values) {
+			sb.append(sep + "(");
+			String sep2 = "";
+			int idx = 0;
+			for (String v : values) {
+				if (table.isValueNeedQuotes(table.skewed_by.columns.get(idx))) {
+					sb.append(String.format("%s'%s'", sep2, v));
+				} else {
+					sb.append(String.format("%s %s", sep2, v));
+				}
+				sep2 = ",";
+				idx++;
+			}
+			sb.append(")");
+			sep = ",";
+		}
+		sb.append(")");
+		if (table.skewed_by.stored_as_directories) {
+			sb.append(" STORED AS DIRECTORIES");
+		}
+		return sb.toString();
+	}
+
 	private void createTable(YamlTable target) throws CommandNeedRetryException, DescriptionException {
 		StringBuffer sb = new StringBuffer();
 		sb.append(String.format("CREATE %s TABLE %s.%s ", (target.external.booleanValue() ? "EXTERNAL" : ""), target.database, target.name));
@@ -127,8 +159,11 @@ public class TableEngine extends BaseEngine {
 			sb.append(" PARTITIONED BY ");
 			wrapFields(target.partitions, sb);
 		}
-		if(target.clustered_by != null) {
+		if (target.clustered_by != null) {
 			sb.append(buildClustering(target.clustered_by));
+		}
+		if (target.skewed_by != null) {
+			sb.append(buildSkewedBy(target));
 		}
 		if (target.delimited != null) {
 			sb.append(" ROW FORMAT DELIMITED");
@@ -224,17 +259,23 @@ public class TableEngine extends BaseEngine {
 			f.comment = field.getComment();
 			existing.partitions.add(f);
 		}
-		if(table.getNumBuckets() > 0) {
+		if (table.getNumBuckets() > 0) {
 			existing.clustered_by = new YamlTable.Bucketing();
 			existing.clustered_by.columns = table.getBucketCols();
 			existing.clustered_by.nbr_buckets = table.getNumBuckets();
 			existing.clustered_by.sorted_by = new Vector<YamlTable.SortItem>();
-			for(Order order : table.getSortCols()) {
+			for (Order order : table.getSortCols()) {
 				YamlTable.SortItem si = new YamlTable.SortItem();
 				si.column = order.getCol();
 				si.direction = order.getOrder() == 0 ? Direction.DESC : Direction.ASC;
 				existing.clustered_by.sorted_by.add(si);
 			}
+		}
+		if(table.getSkewedColNames() != null && table.getSkewedColNames().size() > 0) {
+			existing.skewed_by = new YamlTable.Skewing();
+			existing.skewed_by.columns = table.getSkewedColNames();
+			existing.skewed_by.values = table.getSkewedColValues();
+			existing.skewed_by.stored_as_directories = table.isStoredAsSubDirectories();
 		}
 		existing.comment = table.getParameters().get("comment");
 
@@ -351,8 +392,8 @@ public class TableEngine extends BaseEngine {
 			diffTable.fields.add(existing.fields.get(i));
 			migration++;
 		}
-		if(diffTable.fields.size() == 0) {
-			diffTable.fields = null;		
+		if (diffTable.fields.size() == 0) {
+			diffTable.fields = null;
 		}
 		// ---------------------------------------------------------------- Handle partition (Only type change are possible using Alter command)
 		int commonPartCount = Math.min(existing.partitions.size(), target.partitions.size());
@@ -389,43 +430,81 @@ public class TableEngine extends BaseEngine {
 			diffTable.partitions.add(existing.partitions.get(i));
 			migration++;
 		}
-		if(diffTable.partitions.size() == 0) {
+		if (diffTable.partitions.size() == 0) {
 			diffTable.partitions = null;
 		}
 		// ---------------------------------------------------------------- Handle Clustering
-		if(existing.clustered_by != null && target.clustered_by == null) {
+		if (existing.clustered_by != null && target.clustered_by == null) {
 			// Need to remove clustering
 			diffTable.clustered_by = existing.clustered_by;
 			migration++;
-		} else if(existing.clustered_by == null && target.clustered_by != null) {
+		} else if (existing.clustered_by == null && target.clustered_by != null) {
 			// Need to add clustering
-			if(target.alterable) {
-				changes.add(String.format("ALTER TABLE %s.%s %s", table.getDbName(), table.getTableName(), buildClustering(target.clustered_by) ));
+			if (target.alterable) {
+				changes.add(String.format("ALTER TABLE %s.%s %s", table.getDbName(), table.getTableName(), buildClustering(target.clustered_by)));
 			} else {
 				diffTable.clustered_by = target.clustered_by;
 				migration++;
 			}
-		} else if(existing.clustered_by != null && target.clustered_by != null) {
+		} else if (existing.clustered_by != null && target.clustered_by != null) {
 			// Need to compare clustering
-			if(Utils.isDifferent(existing.clustered_by, target.clustered_by)) {
-				if(target.alterable) {
-					changes.add(String.format("ALTER TABLE %s.%s %s", table.getDbName(), table.getTableName(), buildClustering(target.clustered_by) ));
+			if (Utils.isDifferent(existing.clustered_by, target.clustered_by)) {
+				if (target.alterable) {
+					changes.add(String.format("ALTER TABLE %s.%s %s", table.getDbName(), table.getTableName(), buildClustering(target.clustered_by)));
 				} else {
 					diffTable.clustered_by = new YamlTable.Bucketing();
-					if(Utils.isDifferent(existing.clustered_by.columns, target.clustered_by.columns)) {
+					if (Utils.isDifferent(existing.clustered_by.columns, target.clustered_by.columns)) {
 						diffTable.clustered_by.columns = target.clustered_by.columns;
 					}
-					if(Utils.isDifferent(existing.clustered_by.nbr_buckets, target.clustered_by.nbr_buckets)) {
+					if (Utils.isDifferent(existing.clustered_by.nbr_buckets, target.clustered_by.nbr_buckets)) {
 						diffTable.clustered_by.nbr_buckets = target.clustered_by.nbr_buckets;
 					}
-					if(Utils.isDifferent(existing.clustered_by.sorted_by, target.clustered_by.sorted_by)) {
+					if (Utils.isDifferent(existing.clustered_by.sorted_by, target.clustered_by.sorted_by)) {
 						diffTable.clustered_by.sorted_by = target.clustered_by.sorted_by;
 					}
 					migration++;
 				}
 			}
-		} // else both null clustering. Nothing to fo
-		// ---------------------------------------------------------------- Handle table comment
+		} // else both null clustering. Nothing to do
+		// ---------------------------------------------------------------- Handle skewed by
+		if(existing.skewed_by != null && target.skewed_by == null) {
+			// Need to remove skewed_by
+			if(target.alterable) {
+				changes.add(String.format("ALTER TABLE %s.%s NOT SKEWED", table.getDbName(), table.getTableName()));
+			} else {
+				diffTable.skewed_by = existing.skewed_by;
+				migration++;
+			}
+		} else if (existing.skewed_by == null && target.skewed_by != null) {
+			// Need to add skewed_by
+			if(target.alterable) {
+				changes.add(String.format("ALTER TABLE %s.%s %s", table.getDbName(), table.getTableName(), buildSkewedBy(target)));
+			} else {
+				diffTable.skewed_by = target.skewed_by;
+				migration++;
+			}
+		} else if(existing.skewed_by != null && target.skewed_by != null) {
+			// need to compare skewed_by
+			if(Utils.isDifferent(existing.skewed_by, target.skewed_by)) {
+				if(target.alterable) {
+					changes.add(String.format("ALTER TABLE %s.%s %s", table.getDbName(), table.getTableName(), buildSkewedBy(target)));
+				} else {
+					diffTable.skewed_by = new YamlTable.Skewing();
+					if(Utils.isDifferent(existing.skewed_by.columns, target.skewed_by.columns)) {
+						diffTable.skewed_by.columns = target.skewed_by.columns;
+					}
+					if(Utils.isDifferent(existing.skewed_by.values, target.skewed_by.values)) {
+						diffTable.skewed_by.values = target.skewed_by.values;
+					}
+					if(Utils.isDifferent(existing.skewed_by.stored_as_directories, target.skewed_by.stored_as_directories)) {
+						diffTable.skewed_by.stored_as_directories = target.skewed_by.stored_as_directories;
+					}
+					migration++;
+				}
+			}
+		} // else both null. Nothing to do
+		
+		  // ---------------------------------------------------------------- Handle table comment
 		if (Utils.isEscapedDifferent(existing.comment, target.comment)) {
 			if (!target.external) { // An external table will not accept any ALTER command
 				if (target.comment == null) {
