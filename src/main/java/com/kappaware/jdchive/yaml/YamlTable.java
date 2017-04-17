@@ -23,8 +23,8 @@ public class YamlTable {
 		public String serde;
 		public Map<String, String> serde_properties;
 		public String storage_handler;
-		
 		public List<YamlField> partitions;
+		public Bucketing clustered_by;
 
 		public Boolean alterable;
 		public Boolean droppable;
@@ -36,10 +36,54 @@ public class YamlTable {
 		static public class Delimited {
 			public String fields_terminated_by;
 			public String fields_escaped_by;
-			public String collection_item_terminated_by;
+			public String collection_items_terminated_by;
 			public String map_keys_terminated_by;
 			public String lines_terminated_by;
 			public String null_defined_as;
+		}
+		
+		public enum Direction {
+			ASC, asc, DESC, desc
+		}
+		
+		static public class SortItem {
+			public String column;
+			public Direction direction;
+			public void polish() {
+				if(this.direction == null) {
+					this.direction = Direction.ASC;
+				}
+			}
+			@Override
+			public boolean equals(Object other) {
+				return column.equals(((SortItem)other).column) && direction.toString().toLowerCase().equals(((SortItem)other).direction.toString().toLowerCase());
+			}
+		}
+		
+		static public class Bucketing {
+			public List<String> columns;
+			public Integer nbr_buckets;
+			public List<SortItem> sorted_by;
+			
+			public void polish(String tableName) throws DescriptionException {
+				if(this.columns == null) {
+					this.columns = new Vector<String>();
+				}
+				if(this.sorted_by == null) {
+					this.sorted_by = new Vector<SortItem>();
+				}
+				if(this.nbr_buckets == null) {
+					throw new DescriptionException(String.format("Invalid description: Table '%s' is missing clustered_by.nbr_buckets attribute!", tableName));
+				}
+				for(SortItem si : this.sorted_by) {
+					si.polish();
+				}
+			}
+			@Override
+			public boolean equals(Object other) {
+				return this.columns.equals(((Bucketing)other).columns) && this.nbr_buckets.equals(((Bucketing)other).nbr_buckets) && this.sorted_by.equals(((Bucketing)other).sorted_by);
+			}
+			
 		}
 		
 		public void polish(YamlState defaultState) throws DescriptionException {
@@ -84,6 +128,9 @@ public class YamlTable {
 			}
 			if(this.partitions == null) {
 				this.partitions = new Vector<YamlField>();
+			}
+			if(this.clustered_by != null) {
+				this.clustered_by.polish(String.format("%s.%s",  this.database, this.name));
 			}
 		}
 		

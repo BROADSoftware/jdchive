@@ -11,6 +11,7 @@ import java.util.Vector;
 import org.apache.hadoop.hive.serde.serdeConstants;
 import org.apache.hadoop.hive.metastore.TableType;
 import org.apache.hadoop.hive.metastore.api.FieldSchema;
+import org.apache.hadoop.hive.metastore.api.Order;
 import org.apache.hadoop.hive.ql.CommandNeedRetryException;
 import org.apache.hadoop.hive.ql.Driver;
 import org.apache.hadoop.hive.ql.io.HiveIgnoreKeyTextOutputFormat;
@@ -30,6 +31,7 @@ import com.kappaware.jdchive.yaml.YamlField;
 import com.kappaware.jdchive.yaml.YamlReport;
 import com.kappaware.jdchive.yaml.YamlState;
 import com.kappaware.jdchive.yaml.YamlTable;
+import com.kappaware.jdchive.yaml.YamlTable.Direction;
 
 
 @SuppressWarnings("deprecation")
@@ -92,6 +94,28 @@ public class TableEngine extends BaseEngine {
 		}
 	}
 
+	private static String buildClustering(YamlTable.Bucketing clustered_by) {
+		StringBuffer sb = new StringBuffer();
+		sb.append(" CLUSTERED BY(");
+		String sep = "";
+		for(String col : clustered_by.columns) {
+			sb.append(String.format("%s%s", sep, col));
+			sep = ",";
+		}
+		sb.append(")");
+		if(clustered_by.sorted_by.size() > 0) {
+			sb.append(" SORTED BY (");
+			sep = "";
+			for(YamlTable.SortItem si : clustered_by.sorted_by) {
+				sb.append(String.format("%s%s %s", sep, si.column, si.direction));
+				sep = ",";
+			}
+			sb.append(")");
+		}
+		sb.append(String.format(" INTO %d BUCKETS", clustered_by.nbr_buckets));
+		return sb.toString();
+	}
+	
 	private void createTable(YamlTable target) throws CommandNeedRetryException, DescriptionException {
 		StringBuffer sb = new StringBuffer();
 		sb.append(String.format("CREATE %s TABLE %s.%s ", (target.external.booleanValue() ? "EXTERNAL" : ""), target.database, target.name));
@@ -103,6 +127,9 @@ public class TableEngine extends BaseEngine {
 			sb.append(" PARTITIONED BY ");
 			wrapFields(target.partitions, sb);
 		}
+		if(target.clustered_by != null) {
+			sb.append(buildClustering(target.clustered_by));
+		}
 		if (target.delimited != null) {
 			sb.append(" ROW FORMAT DELIMITED");
 			if (target.delimited.fields_terminated_by != null) {
@@ -111,8 +138,8 @@ public class TableEngine extends BaseEngine {
 			if (target.delimited.fields_escaped_by != null) {
 				sb.append(String.format(" ESCAPED BY '%s'", target.delimited.fields_escaped_by));
 			}
-			if (target.delimited.collection_item_terminated_by != null) {
-				sb.append(String.format(" COLLECTION ITEMS TERMINATED BY '%s'", target.delimited.collection_item_terminated_by));
+			if (target.delimited.collection_items_terminated_by != null) {
+				sb.append(String.format(" COLLECTION ITEMS TERMINATED BY '%s'", target.delimited.collection_items_terminated_by));
 			}
 			if (target.delimited.map_keys_terminated_by != null) {
 				sb.append(String.format(" MAP KEYS TERMINATED BY '%s'", target.delimited.map_keys_terminated_by));
@@ -175,7 +202,7 @@ public class TableEngine extends BaseEngine {
 
 		int migration = 0;
 
-		// Rebuild and original in Yaml format, to ease comparaison
+		// --------------------------------------- Rebuild an original in Yaml format, to ease comparison
 		YamlTable existing = new YamlTable();
 		existing.name = table.getTableName();
 		existing.database = table.getDbName();
@@ -197,6 +224,18 @@ public class TableEngine extends BaseEngine {
 			f.comment = field.getComment();
 			existing.partitions.add(f);
 		}
+		if(table.getNumBuckets() > 0) {
+			existing.clustered_by = new YamlTable.Bucketing();
+			existing.clustered_by.columns = table.getBucketCols();
+			existing.clustered_by.nbr_buckets = table.getNumBuckets();
+			existing.clustered_by.sorted_by = new Vector<YamlTable.SortItem>();
+			for(Order order : table.getSortCols()) {
+				YamlTable.SortItem si = new YamlTable.SortItem();
+				si.column = order.getCol();
+				si.direction = order.getOrder() == 0 ? Direction.DESC : Direction.ASC;
+				existing.clustered_by.sorted_by.add(si);
+			}
+		}
 		existing.comment = table.getParameters().get("comment");
 
 		existing.input_format = table.getSd().getInputFormat();
@@ -210,7 +249,7 @@ public class TableEngine extends BaseEngine {
 		existing.location = table.getDataLocation().toString();
 		existing.properties = table.getParameters();
 
-		// Normalize the target
+		// ---------------------------------------------------------------------- Normalize the target
 		target.location = this.normalizePath(target.location);
 
 		if (target.input_format == null && target.output_format == null && target.storage_handler == null && target.stored_as == null) {
@@ -236,8 +275,8 @@ public class TableEngine extends BaseEngine {
 			if (target.delimited.fields_escaped_by != null) {
 				target.serde_properties.put(serdeConstants.ESCAPE_CHAR, target.delimited.fields_escaped_by);
 			}
-			if (target.delimited.collection_item_terminated_by != null) {
-				target.serde_properties.put(serdeConstants.COLLECTION_DELIM, target.delimited.collection_item_terminated_by);
+			if (target.delimited.collection_items_terminated_by != null) {
+				target.serde_properties.put(serdeConstants.COLLECTION_DELIM, target.delimited.collection_items_terminated_by);
 			}
 			if (target.delimited.map_keys_terminated_by != null) {
 				target.serde_properties.put(serdeConstants.MAPKEY_DELIM, target.delimited.map_keys_terminated_by);
@@ -259,6 +298,7 @@ public class TableEngine extends BaseEngine {
 		diffTable.name = table.getTableName();
 		diffTable.database = table.getDbName();
 
+		// ---------------------------------------------------------------------------------------- BEGIN COMPARING existing and target
 		// --------------------------------------------------------------- external switch
 		if (!existing.external.equals(target.external)) {
 			diffTable.external = target.external;
@@ -311,6 +351,9 @@ public class TableEngine extends BaseEngine {
 			diffTable.fields.add(existing.fields.get(i));
 			migration++;
 		}
+		if(diffTable.fields.size() == 0) {
+			diffTable.fields = null;		
+		}
 		// ---------------------------------------------------------------- Handle partition (Only type change are possible using Alter command)
 		int commonPartCount = Math.min(existing.partitions.size(), target.partitions.size());
 		diffTable.partitions = new Vector<YamlField>();
@@ -346,6 +389,42 @@ public class TableEngine extends BaseEngine {
 			diffTable.partitions.add(existing.partitions.get(i));
 			migration++;
 		}
+		if(diffTable.partitions.size() == 0) {
+			diffTable.partitions = null;
+		}
+		// ---------------------------------------------------------------- Handle Clustering
+		if(existing.clustered_by != null && target.clustered_by == null) {
+			// Need to remove clustering
+			diffTable.clustered_by = existing.clustered_by;
+			migration++;
+		} else if(existing.clustered_by == null && target.clustered_by != null) {
+			// Need to add clustering
+			if(target.alterable) {
+				changes.add(String.format("ALTER TABLE %s.%s %s", table.getDbName(), table.getTableName(), buildClustering(target.clustered_by) ));
+			} else {
+				diffTable.clustered_by = target.clustered_by;
+				migration++;
+			}
+		} else if(existing.clustered_by != null && target.clustered_by != null) {
+			// Need to compare clustering
+			if(Utils.isDifferent(existing.clustered_by, target.clustered_by)) {
+				if(target.alterable) {
+					changes.add(String.format("ALTER TABLE %s.%s %s", table.getDbName(), table.getTableName(), buildClustering(target.clustered_by) ));
+				} else {
+					diffTable.clustered_by = new YamlTable.Bucketing();
+					if(Utils.isDifferent(existing.clustered_by.columns, target.clustered_by.columns)) {
+						diffTable.clustered_by.columns = target.clustered_by.columns;
+					}
+					if(Utils.isDifferent(existing.clustered_by.nbr_buckets, target.clustered_by.nbr_buckets)) {
+						diffTable.clustered_by.nbr_buckets = target.clustered_by.nbr_buckets;
+					}
+					if(Utils.isDifferent(existing.clustered_by.sorted_by, target.clustered_by.sorted_by)) {
+						diffTable.clustered_by.sorted_by = target.clustered_by.sorted_by;
+					}
+					migration++;
+				}
+			}
+		} // else both null clustering. Nothing to fo
 		// ---------------------------------------------------------------- Handle table comment
 		if (Utils.isEscapedDifferent(existing.comment, target.comment)) {
 			if (!target.external) { // An external table will not accept any ALTER command

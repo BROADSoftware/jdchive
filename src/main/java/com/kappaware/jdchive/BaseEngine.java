@@ -49,10 +49,14 @@ public class BaseEngine {
 			log.info(String.format("DRY RUN: Would perform '%s'", cmd));
 		} else {
 			log.info(String.format("Will perform '%s'", cmd));
-			CommandProcessorResponse ret = this.driver.run(cmd, false);
-			//log.info(String.format("Response: %s", ret.toString()));
-			if (ret.getResponseCode() != 0) {
-				throw new DescriptionException(String.format("%s", ret.toString()));
+			try {
+				CommandProcessorResponse ret = this.driver.run(cmd, false);
+				//log.info(String.format("Response: %s", ret.toString()));
+				if (ret.getResponseCode() != 0) {
+					throw new DescriptionException(String.format("%s", ret.toString()));
+				}
+			} catch (Exception t) {
+				throw new DescriptionException(String.format("While performing '%s'",cmd), t);
 			}
 		}
 		this.report.done.commands.add(cmd);
