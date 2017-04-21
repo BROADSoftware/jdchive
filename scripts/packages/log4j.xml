@@ -28,7 +28,7 @@
  	<logger name="org.apache.hadoop.hive.ql"><level value="warn"/></logger>
  	<logger name="org.apache.zookeeper"><level value="warn"/></logger>
  	<logger name="hive.metastore"><level value="warn"/></logger>
- 	<logger name="hive.ql.parse.ParseDriver"><level value="warn"/></logger>
+ 	<logger name="hive.ql"><level value="warn"/></logger>
  	
  	
 

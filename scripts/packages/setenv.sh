@@ -17,7 +17,7 @@ OPTS="$OPTS --configFile $HIVE_CONFIG_FILE"
 
 
 # Dump configuration, for debugging
-OPTS="$OPTS --dumpConfigFile /tmp/jdchive-conf.txt"
+#OPTS="$OPTS --dumpConfigFile /tmp/jdchive-conf.txt"
 
 # Report performed opération
 OPTS="$OPTS --reportFile /tmp/jdchive-report-$(date +%y%m%d-%H%M%S).yml"
