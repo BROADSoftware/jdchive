@@ -46,9 +46,13 @@ public class Main {
 	static public void main(String[] argv) throws IOException {
 		try {
 			System.exit(main2(argv));
-		} catch (ConfigurationException | DescriptionException | InterruptedException | TException | HiveException | CommandNeedRetryException e) {
+		} catch (ConfigurationException | DescriptionException e) {
+			log.error(String.format("Error: %s", e.getMessage()));
+			//System.err.println("ERROR: " + e.getMessage());
+			System.exit(2);
+		} catch (InterruptedException | TException | HiveException | CommandNeedRetryException e) {
 			log.error("Error in main():", e);
-			System.err.println("ERROR: " + e.getMessage());
+			//System.err.println("ERROR: " + e.getMessage());
 			System.exit(2);
 		}
 	}

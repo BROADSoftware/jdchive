@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2016 BROADSoftware
+ * Copyright (C) 2017 BROADSoftware
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,6 +13,14 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+ 
+ 
+
+plugins {
+  id 'nebula.ospackage' version '3.4.0'
+}
+
+defaultTasks 'rpm'
 
 apply plugin: 'java'
 apply plugin: 'eclipse'
@@ -77,5 +85,30 @@ task uberJar(type: Jar) {
     from { configurations.compileAndJar.collect { it.isDirectory() ? it : zipTree(it) } }
     with jar
 }
+
+
+task rpm(type: Rpm) {
+	summary 'HIVE table creation tool'
+	packageName rpmBaseName
+	version versionForRpm
+	arch NOARCH
+	vendor 'BROADSoftware'
+	license 'Apache 2.0'
+	os LINUX
+	release '1'
+	packageDescription 'jdchive is an HIVE admin tool allowing idempotency on table definition.'
+    
+   	from(uberJar.outputs.files) {
+	    into '/opt/jdchive'
+	    user 'root'
+		group 'root'
+	    fileMode 0644
+    }
+    
+   	from('scripts/packages/jdchive') { into '/usr/bin'; user 'root'; group 'root'; fileMode 0755  }
+   	from('scripts/packages/log4j.xml') { into '/etc/jdchive'; user 'root'; group 'root'; fileMode 0644  }
+   	from('scripts/packages/setenv.sh') { into '/etc/jdchive'; user 'root'; group 'root'; fileMode 0644    }
+}
+
 
 
