@@ -67,7 +67,7 @@ public class Main {
 			throw new ConfigurationException(String.format("Unable to open '%s' for reading", file.getAbsolutePath()));
 		}
 		YamlDescription description = YamlUtils.parse(file, YamlDescription.class);
-		description.polish(jdcConfiguration.getDefaultState());
+		description.polish(jdcConfiguration.getDefaultState(), true);
 
 		HiveConf config = new HiveConf();
 

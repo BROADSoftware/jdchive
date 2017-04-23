@@ -1,3 +1,18 @@
+/*
+ * Copyright (C) 2017 BROADSoftware
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package com.kappaware.jdchive.yaml;
 
 import java.util.Arrays;
@@ -71,14 +86,14 @@ public class YamlTable {
 		public Integer nbr_buckets;
 		public List<SortItem> sorted_by;
 
-		public void polish(String tableName) throws DescriptionException {
+		public void polish(String tableName, boolean check) throws DescriptionException {
 			if (this.columns == null) {
 				this.columns = new Vector<String>();
 			}
 			if (this.sorted_by == null) {
 				this.sorted_by = new Vector<SortItem>();
 			}
-			if (this.nbr_buckets == null) {
+			if (check && this.nbr_buckets == null) {
 				throw new DescriptionException(String.format("Invalid description: Table '%s' is missing clustered_by.nbr_buckets attribute!", tableName));
 			}
 			for (SortItem si : this.sorted_by) {
@@ -116,11 +131,11 @@ public class YamlTable {
 
 	}
 
-	public void polish(YamlState defaultState) throws DescriptionException {
-		if (this.name == null) {
+	public void polish(YamlState defaultState, boolean check) throws DescriptionException {
+		if (check && this.name == null) {
 			throw new DescriptionException("Invalid description: Every table must have a 'name' attribute");
 		}
-		if (this.database == null) {
+		if (check && this.database == null) {
 			throw new DescriptionException(String.format("Invalid description: Table '%s' is missing database attribute!", this.name));
 		}
 		if (this.external == null) {
@@ -133,18 +148,18 @@ public class YamlTable {
 			this.fields = new Vector<YamlField>();
 		}
 		for (YamlField f : this.fields) {
-			f.polish(this.name, defaultState);
+			f.polish(this.name, defaultState, check);
 		}
 		if (this.properties == null) {
 			this.properties = new HashMap<String, String>();
 		}
-		if ((this.input_format == null) != (this.output_format == null)) {
+		if (check && ((this.input_format == null) != (this.output_format == null))) {
 			throw new DescriptionException(String.format("Invalid description: Table '%s.%s': Both 'input_format' and 'output_format' must be defined together!", this.database, this.name));
 		}
-		if (this.input_format != null && this.stored_as != null) {
+		if (check && (this.input_format != null && this.stored_as != null)) {
 			throw new DescriptionException(String.format("Invalid description: Table '%s.%s': Both 'stored_as' and 'input/output_format' can't be defined together!", this.database, this.name));
 		}
-		if (this.delimited != null && this.serde != null) {
+		if (check && (this.delimited != null && this.serde != null)) {
 			throw new DescriptionException(String.format("Invalid description: Table '%s.%s': Both 'delimited' and 'serde' can't be defined together!", this.database, this.name));
 		}
 		if (this.serde_properties == null) {
@@ -159,8 +174,11 @@ public class YamlTable {
 		if (this.partitions == null) {
 			this.partitions = new Vector<YamlField>();
 		}
+		for (YamlField f : this.partitions) {
+			f.polish(this.name, defaultState, check);
+		}
 		if (this.clustered_by != null) {
-			this.clustered_by.polish(String.format("%s.%s", this.database, this.name));
+			this.clustered_by.polish(String.format("%s.%s", this.database, this.name), check);
 		}
 		if (this.skewed_by != null) {
 			this.skewed_by.polish();
@@ -171,12 +189,46 @@ public class YamlTable {
 		return YamlUtils.yaml2String(this);
 	}
 
-	public Long computeFingerprint() throws JsonProcessingException {
-		// Fingerprint must be database name independant
-		String db = this.database;
+	/* WARNING: This function modify the data 
+	 */
+	public Long computeFingerprint() throws JsonProcessingException, DescriptionException {
+		this.polish(YamlState.present, false);
+		// Fingerprint must be database independant
 		this.database = null;
+		// Try to cannonize the table definition
+		this.name = this.name.toLowerCase();
+		if (this.fields != null) {
+			for (YamlField field : this.fields) {
+				field.name = field.name.toLowerCase();
+				field.type = field.type.toUpperCase();
+			}
+		}
+		if (this.partitions != null) {
+			for (YamlField field : this.partitions) {
+				field.name = field.name.toLowerCase();
+				field.type = field.type.toUpperCase();
+			}
+		}
+		if(this.clustered_by != null) {
+			for(int i = 0; i < this.clustered_by.columns.size(); i++) {
+				this.clustered_by.columns.set(i, this.clustered_by.columns.get(i).toLowerCase());
+			}
+			for(SortItem si : this.clustered_by.sorted_by) {
+				si.column = si.column.toLowerCase();
+				if(si.direction == Direction.asc) {
+					si.direction = Direction.ASC;
+				}
+				if(si.direction == Direction.desc) {
+					si.direction = Direction.DESC;
+				}
+			}
+		}
+		if(this.skewed_by != null) {
+			for(int i = 0; i < this.skewed_by.columns.size(); i++) {
+				this.skewed_by.columns.set(i, this.skewed_by.columns.get(i).toLowerCase());
+			}
+		}
 		String yaml = this.toYaml();
-		this.database = db;
 		return Math.abs(hashcode(yaml));
 	}
 
@@ -187,24 +239,24 @@ public class YamlTable {
 		}
 		return h;
 	}
-	
+
 	private Map<String, String> typeByColumn;
-	
+
 	public String getColumnType(String colName) {
-		if(this.typeByColumn == null) {
+		if (this.typeByColumn == null) {
 			this.typeByColumn = new HashMap<String, String>();
-			for(YamlField f : this.fields) {
+			for (YamlField f : this.fields) {
 				this.typeByColumn.put(f.name.trim().toUpperCase(), f.type.trim().toUpperCase());
 			}
-			for(YamlField f : this.partitions) {
+			for (YamlField f : this.partitions) {
 				this.typeByColumn.put(f.name.trim().toUpperCase(), f.type.trim().toUpperCase());
 			}
 		}
 		return this.typeByColumn.get(colName.trim().toUpperCase());
 	}
-	
-	static private Set<String> quotedType = new HashSet<String>( Arrays.asList( "STRING", "VARCHAR", "CHAR") );
-	
+
+	static private Set<String> quotedType = new HashSet<String>(Arrays.asList("STRING", "VARCHAR", "CHAR"));
+
 	public boolean isValueNeedQuotes(String colName) {
 		return quotedType.contains(this.getColumnType(colName));
 	}

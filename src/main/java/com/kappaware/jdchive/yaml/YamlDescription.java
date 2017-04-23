@@ -24,15 +24,15 @@ public class YamlDescription {
 	public List<YamlDatabase> databases;
 	public List<YamlTable> tables;
 
-	public void polish(YamlState defaultState) throws DescriptionException {
+	public void polish(YamlState defaultState, boolean check) throws DescriptionException {
 		if (databases != null) {
 			for (YamlDatabase db : this.databases) {
-				db.polish(defaultState);
+				db.polish(defaultState, check);
 			}
 		}
 		if (tables != null) {
 			for (YamlTable tbl : this.tables) {
-				tbl.polish(defaultState);
+				tbl.polish(defaultState, check);
 			}
 		}
 	}
