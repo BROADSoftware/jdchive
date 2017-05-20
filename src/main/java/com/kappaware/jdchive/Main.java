@@ -50,7 +50,7 @@ public class Main {
 			log.error(String.format("Error: %s", e.getMessage()));
 			//System.err.println("ERROR: " + e.getMessage());
 			System.exit(2);
-		} catch (InterruptedException | TException | HiveException | CommandNeedRetryException e) {
+		} catch (Throwable e) {
 			log.error("Error in main():", e);
 			//System.err.println("ERROR: " + e.getMessage());
 			System.exit(2);
@@ -141,5 +141,6 @@ public class Main {
 		System.out.println(m1);
 		log.info(m1);
 		return migrations > 0 ? 1 : 0;
+		//return 0;
 	}
 }

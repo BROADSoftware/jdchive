@@ -22,9 +22,9 @@ Regarding schema evolution, **jdchive** will do its best to perform required mod
 
 Once installed, usage is the following:
 
-~~~bash
+```bash
 # jdchive --inputFile yourDescription.yml
-~~~
+```
  
 Where `yourDescription.yml` is a file containing your target Hive database and table description. **jdchive** will then perform all required operation to reach this target state.
 
@@ -32,7 +32,7 @@ Note than if `yourDescription.yml` content match the current configuration, no o
 
 Here is a sample of such `description.yml` file:
 
-~~~yaml
+```yaml
 databases:
 - name: jdctest1
   comment: "For jdchive table testing"
@@ -48,7 +48,7 @@ tables:
   - name: lname
     type: string
     comment: "Last name"
-~~~
+```
 
 Of course, database and table description may include several other attributes, to represent most of the option on Hive table creation. This is described later in this document.  
 
@@ -84,7 +84,7 @@ Here is a description of all attributes for a Database definition.
 
 ### Ownership
 
-Database owner can be explicitly set by the attribute defined above. If this attribute is not present, then the owner 
+Database owner can be explicitly set by the attribute defined above. If this attribute is not present, then the owner will be the account launching the command.
 
 Once created, one may change owner by setting the corresponding attribute. Launching **jdchive** under another account will have no impact.
 
@@ -647,7 +647,7 @@ Each migration is defined by 6 attributes:
 
 ## Database migration
 
-Based on the reporting feature of **jdchive**, one may conceive to build a simple Database migration tool.
+Based on the [reporting feature](#report-file) of **jdchive**, one may conceive to build a simple Database migration tool.
 
 The base principle of such tools is to apply migration step based on a initial and target database schema version. Of course, coding the migration steps is up to the user in all case. There is no magic here.
 
